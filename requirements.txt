@@ -1,0 +1,8 @@
+streamlit>=1.40
+feedparser>=6.0
+pandas>=2.2
+requests>=2.32
+beautifulsoup4>=4.12
+plotly>=5.24
+textblob>=0.18
+openpyxl>=3.1

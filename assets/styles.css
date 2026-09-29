@@ -1,0 +1,17 @@
+.stApp{background:#0D1117}
+section[data-testid="stSidebar"]{background:#161B22;border-right:1px solid #30363D}
+.hero h1{margin:0;font-size:1.9rem;color:#F0F6FC}.hero p{color:#8B949E;margin:.2rem 0 1rem}
+.kpi{background:#161B22;border:1px solid #30363D;border-radius:10px;padding:14px 16px;border-top:3px solid #58A6FF}
+.kpi .l{color:#8B949E;font-size:.78rem}.kpi .v{font-size:1.7rem;font-weight:700;color:#F0F6FC}
+.card{background:#161B22;border:1px solid #30363D;border-radius:10px;padding:16px;margin-bottom:12px;transition:.15s}
+.card:hover{border-color:#58A6FF;transform:translateY(-1px)}
+.card h4{margin:0 0 6px;color:#F0F6FC;font-size:1.05rem}.card p{color:#C9D1D9;font-size:.9rem;margin:6px 0}
+.meta{color:#8B949E;font-size:.78rem}
+.badge{display:inline-block;padding:2px 9px;border-radius:12px;font-size:.72rem;margin-right:6px;border:1px solid #30363D}
+.b-Positivo{color:#3FB950;border-color:#3FB950}.b-Negativo{color:#F85149;border-color:#F85149}
+.b-Neutro{color:#D29922;border-color:#D29922}.b-cat{color:#58A6FF;border-color:#58A6FF}
+.tag{color:#A371F7;font-size:.75rem;margin-right:6px}
+.card a{color:#58A6FF;text-decoration:none;font-size:.85rem}
+.skel{height:92px;border-radius:10px;margin-bottom:12px;background:linear-gradient(90deg,#161B22 25%,#21262D 50%,#161B22 75%);background-size:200% 100%;animation:sh 1.3s infinite}
+@keyframes sh{to{background-position:-200% 0}}
+@media(max-width:768px){.kpi .v{font-size:1.3rem}}
