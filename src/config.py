@@ -2,13 +2,23 @@
 from dataclasses import dataclass
 
 TIMEZONE = "America/Sao_Paulo"
-REFRESH_SECONDS = 3600  # coleta automática de hora em hora
-CACHE_TTL = REFRESH_SECONDS
+REFRESH_SECONDS = 3600  # padrão: coleta automática de hora em hora
+CACHE_TTL = 300  # cache mais curto para permitir atualizações frequentes
 REQUEST_TIMEOUT = 8
 MAX_ITEMS_PER_FEED = 30
 USER_AGENT = "Mozilla/5.0 (NewsIntelligenceHub/1.0)"
 CATEGORIES = ["Política", "Economia", "Mercado Financeiro", "Tecnologia", "Inteligência Artificial"]
 COLORS = {"primary": "#58A6FF", "pos": "#3FB950", "neg": "#F85149", "ai": "#A371F7", "neu": "#D29922"}
+
+# Opções de intervalo de atualização automática (em minutos)
+REFRESH_INTERVALS = {
+    "1 minuto": 60,
+    "5 minutos": 300,
+    "10 minutos": 600,
+    "30 minutos": 1800,
+    "1 hora": 3600,
+    "Desativar": None
+}
 
 
 @dataclass(frozen=True)

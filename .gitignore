@@ -5,3 +5,5 @@ data/cache/*
 !data/cache/.gitkeep
 .env
 .streamlit/secrets.toml
+user_preferences.json
+
