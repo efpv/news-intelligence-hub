@@ -11,7 +11,7 @@ import streamlit as st
 from src import analytics, config, export, portfolio, preferences, rss_reader, summarizer, trends
 
 st.set_page_config(page_title="News Intelligence Hub", page_icon="📡", layout="wide")
-st.markdown(f"<style>{(Path(__file__).parent / 'assets/styles.css').read_text()}</style>", unsafe_allow_html=True)
+st.markdown(f"<style>{(Path(__file__).parent / 'assets/styles.css').read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
 
 # Inicializa preferências do usuário
 preferences.init_session_state()
@@ -43,11 +43,15 @@ def check_refresh() -> None:
         st.rerun()
 
 
-def kpi(col, label: str, value) -> None:
-    col.markdown(f'<div class="kpi"><div class="l">{label}</div><div class="v">{value}</div></div>', unsafe_allow_html=True)
+def kpi_row(items: list[tuple[str, object]]) -> None:
+    """Renderiza KPIs em uma faixa flex (rolagem horizontal em telas pequenas)."""
+    cards = "".join(f'<div class="kpi"><div class="l">{label}</div><div class="v">{value}</div></div>'
+                     for label, value in items)
+    st.markdown(f'<div class="kpi-row">{cards}</div>', unsafe_allow_html=True)
 
 
-def card(r: pd.Series) -> str:
+def card_html(r: pd.Series) -> str:
+    """Card de notícia (sempre visível, sem acordeão)."""
     tags = "".join(f'<span class="tag">#{escape(t)}</span>' for t in r["tags"])
     portfolio_badge = ""
     if "portfolio_badge" in r and pd.notna(r.get("portfolio_badge")):
@@ -61,6 +65,12 @@ def card(r: pd.Series) -> str:
             f'<a href="{escape(r["link"])}" target="_blank" rel="noopener">🔗 Ler notícia completa</a></div>')
 
 
+def render_news_list(df_slice: pd.DataFrame) -> None:
+    """Renderiza a lista de cards de notícia."""
+    for _, row in df_slice.iterrows():
+        st.markdown(card_html(row), unsafe_allow_html=True)
+
+
 @st.fragment(run_every=5)
 def auto_refresh_checker() -> None:
     """Verifica a cada 5 segundos se deve fazer atualização automática."""
@@ -68,8 +78,11 @@ def auto_refresh_checker() -> None:
 
 
 # ---------- Header + carga ----------
-st.markdown('<div class="hero"><h1>📡 News Intelligence Hub</h1>'
-            '<p>Radar Político, Financeiro & Tecnologia — monitoramento em tempo real via RSS</p></div>', unsafe_allow_html=True)
+hcol1, hcol2 = st.columns([3, 1])
+with hcol1:
+    st.markdown('<div class="hero"><h1>📡 News Intelligence Hub</h1>'
+                '<p>Radar Político, Financeiro & Tecnologia — monitoramento em tempo real via RSS</p></div>', unsafe_allow_html=True)
+update_slot = hcol2.empty()
 slot = st.empty()
 slot.markdown('<div class="skel"></div>' * 3, unsafe_allow_html=True)
 with st.spinner("Coletando notícias…"):
@@ -77,6 +90,29 @@ with st.spinner("Coletando notícias…"):
 slot.empty()
 check_refresh()
 auto_refresh_checker()
+update_slot.markdown(f'<div class="update-info">🕒 Última atualização<br><strong>{fetched_at:%d/%m %H:%M}</strong></div>', unsafe_allow_html=True)
+
+# ---------- Persistência de preferências por e-mail ----------
+if st.session_state.get("email"):
+    lcol1, lcol2 = st.columns([5, 1])
+    lcol1.caption(f"💾 Preferências salvas para **{st.session_state['email']}**")
+    if lcol2.button("Sair", key="email_logout_btn", width="content"):
+        preferences.logout()
+        st.rerun()
+else:
+    with st.expander("💾 Salvar minhas preferências por e-mail", expanded=False):
+        st.caption("Informe seu e-mail para salvar sua carteira e filtros. Ao voltar, digite o mesmo "
+                   "e-mail para recuperá-los automaticamente — não é necessário criar senha.")
+        st.caption("⚠️ Não é um login seguro: quem souber o e-mail pode carregar as mesmas preferências.")
+        ecol1, ecol2 = st.columns([3, 1])
+        email_input = ecol1.text_input("E-mail", key="email_login_input",
+                                        placeholder="voce@exemplo.com", label_visibility="collapsed")
+        if ecol2.button("💾 Salvar/Carregar", key="email_login_btn", width="stretch"):
+            if preferences.login_with_email(email_input):
+                st.toast("✅ Preferências vinculadas ao seu e-mail!", icon="✅")
+                st.rerun()
+            else:
+                st.warning("⚠️ Informe um e-mail válido.")
 
 if errors:
     with st.expander(f"⚠️ {len(errors)} fonte(s) com problema"):
@@ -88,102 +124,104 @@ if df.empty:
 # ---------- Sidebar ----------
 sb = st.sidebar
 sb.header("🎛 Filtros")
-
+prefs = st.session_state.preferences
+busca = sb.text_input("🔍 Busca (título/resumo)", value=prefs.get("search_term", ""))
 # ===== BOTÃO DE ATUALIZAÇÃO MANUAL =====
-if sb.button("🔄 Atualizar Notícias Agora", use_container_width=True):
+if sb.button("🔄 Atualizar Notícias Agora", width="stretch"):
     st.cache_data.clear()
     st.rerun()
 
-sb.divider()
-
 # ---------- Seção de Carteira ----------
-sb.divider()
-sb.subheader("💼 Minha Carteira")
+with sb.expander("💼 Minha Carteira", expanded=False):
+    portfolio_list = st.session_state.preferences.get("portfolio", [])
 
-portfolio_list = st.session_state.preferences.get("portfolio", [])
-
-search_query = sb.text_input(
-    "Buscar ativo",
-    placeholder="Digite o nome da empresa ou ticker...",
-    key="asset_search",
-    label_visibility="collapsed"
-)
-
-if search_query:
-    matches = portfolio.search_assets(search_query)
-    if matches:
-        for m in matches:
-            already_added = m["ticker"] in portfolio_list
-            mcol1, mcol2 = sb.columns([4, 1])
-            mcol1.caption(f"{m['ticker']} - {m['company']}")
-            if already_added:
-                mcol2.caption("✅")
-            elif mcol2.button("➕", key=f"add_{m['ticker']}"):
-                portfolio_list = portfolio.add_to_portfolio(portfolio_list, m["ticker"])
-                preferences.update_preference("portfolio", portfolio_list)
-                st.rerun()
-    else:
-        sb.caption("Nenhum ativo encontrado.")
-
-sb.write("")
-if portfolio_list:
-    sb.caption(f"📊 {len(portfolio_list)} ativo(s) monitorado(s)")
-    for ticker in portfolio_list:
-        company_name = portfolio.B3_COMPANIES.get(ticker, {}).get("name", "Desconhecido")
-        pcol1, pcol2 = sb.columns([4, 1])
-        pcol1.caption(f"✅ **{ticker}** - {company_name}")
-        if pcol2.button("❌", key=f"rm_{ticker}"):
-            portfolio_list = portfolio.remove_from_portfolio(portfolio_list, ticker)
-            preferences.update_preference("portfolio", portfolio_list)
-            st.rerun()
-else:
-    sb.caption("Nenhum ativo monitorado ainda. Busque acima para adicionar.")
-
-col1, col2, col3 = sb.columns(3)
-if col1.button("💾 Salvar", use_container_width=True):
-    preferences.save_preferences(st.session_state.preferences)
-    st.toast("✅ Carteira salva!", icon="✅")
-
-if col2.button("♻ Restaurar", use_container_width=True):
-    prefs = preferences.load_preferences()
-    st.session_state.preferences = prefs
-    st.rerun()
-
-if col3.button("🗑", use_container_width=True):
-    st.session_state.preferences["portfolio"] = []
-    preferences.save_preferences(st.session_state.preferences)
-    st.rerun()
-
-portfolio_list = st.session_state.preferences.get("portfolio", [])
-
-# ---------- Backup da Carteira (CSV) ----------
-if portfolio_list:
-    sb.download_button(
-        "⬇ Exportar Carteira (CSV)",
-        portfolio.export_portfolio_csv(portfolio_list),
-        "minha_carteira.csv", "text/csv", use_container_width=True
+    search_query = st.text_input(
+        "Buscar ativo",
+        placeholder="Digite o nome da empresa ou ticker...",
+        key="asset_search",
+        label_visibility="collapsed"
     )
 
-csv_upload = sb.file_uploader("⬆ Importar Carteira (CSV)", type="csv", key="portfolio_csv_uploader")
-if csv_upload is not None:
-    try:
-        imported = portfolio.import_portfolio_csv(csv_upload)
-        merged = portfolio_list[:]
-        for t in imported:
-            merged = portfolio.add_to_portfolio(merged, t)
-        if merged != portfolio_list:
-            preferences.update_preference("portfolio", merged)
-            st.toast(f"✅ {len(imported)} ativo(s) importado(s)!", icon="✅")
+    if search_query:
+        matches = portfolio.search_assets(search_query)
+        if matches:
+            for m in matches:
+                already_added = m["ticker"] in portfolio_list
+                mcol1, mcol2 = st.columns([4, 1])
+                mcol1.caption(f"{m['ticker']} - {m['company']}")
+                if already_added:
+                    mcol2.caption("✅")
+                elif mcol2.button("➕", key=f"add_{m['ticker']}"):
+                    portfolio_list = portfolio.add_to_portfolio(portfolio_list, m["ticker"])
+                    preferences.update_preference("portfolio", portfolio_list)
+                    st.rerun()
+        else:
+            st.caption("Nenhum ativo encontrado.")
+
+    st.write("")
+    if portfolio_list:
+        st.caption(f"📊 {len(portfolio_list)} ativo(s) monitorado(s)")
+        with st.container(key="portfolio_ticker_list"):
+            for ticker in portfolio_list:
+                company_name = portfolio.B3_COMPANIES.get(ticker, {}).get("name", ticker)
+                pcol1, pcol2 = st.columns([4, 1], gap="small")
+                pcol1.caption(f"✅ **{ticker}** - {company_name}")
+                if pcol2.button("🗑", key=f"rm_{ticker}", width="content"):
+                    portfolio_list = portfolio.remove_from_portfolio(portfolio_list, ticker)
+                    preferences.update_preference("portfolio", portfolio_list)
+                    st.rerun()
+    else:
+        st.caption("Nenhum ativo monitorado ainda. Busque acima para adicionar.")
+
+    col1, col2, col3 = st.columns(3)
+    if col1.button("💾 Salvar", width="stretch"):
+        preferences.save_preferences(st.session_state.preferences)
+        st.toast("✅ Carteira salva!", icon="✅")
+
+    if col2.button("♻ Restaurar", width="stretch"):
+        user_id = st.session_state.get("_user_id")
+        if user_id:
+            st.session_state.preferences = preferences.load_preferences(user_id)
             st.rerun()
-    except (ValueError, KeyError) as e:
-        sb.warning(f"⚠️ CSV inválido: {e}")
+        else:
+            st.warning("⚠️ Salve suas preferências com um e-mail (no topo da página) antes de restaurar.")
+
+    if col3.button("🗑", width="stretch"):
+        st.session_state.preferences["portfolio"] = []
+        preferences.save_preferences(st.session_state.preferences)
+        st.rerun()
+
+    portfolio_list = st.session_state.preferences.get("portfolio", [])
+
+    if not st.session_state.get("_user_id"):
+        st.caption("💡 Salve suas preferências com um e-mail (no topo da página) para não perdê-las ao fechar o navegador.")
+
+    # ---------- Backup da Carteira (CSV) ----------
+    if portfolio_list:
+        st.download_button(
+            "⬇ Exportar Carteira (CSV)",
+            portfolio.export_portfolio_csv(portfolio_list),
+            "minha_carteira.csv", "text/csv", width="stretch"
+        )
+
+    csv_upload = st.file_uploader("⬆ Importar Carteira (CSV)", type="csv", key="portfolio_csv_uploader")
+    if csv_upload is not None:
+        try:
+            imported = portfolio.import_portfolio_csv(csv_upload)
+            merged = portfolio_list[:]
+            for t in imported:
+                merged = portfolio.add_to_portfolio(merged, t)
+            if merged != portfolio_list:
+                preferences.update_preference("portfolio", merged)
+                st.toast(f"✅ {len(imported)} ativo(s) importado(s)!", icon="✅")
+                st.rerun()
+        except (ValueError, KeyError) as e:
+            st.warning(f"⚠️ CSV inválido: {e}")
 
 # ---------- Filtros de Notícias ----------
-sb.divider()
 sb.subheader("🔎 Filtros de Notícias")
 sb.caption("Customize como deseja ver as notícias")
 
-prefs = st.session_state.preferences
 cat_options = ["Todas"] + config.CATEGORIES
 cat_default = prefs.get("selected_category", "Todas")
 cat = sb.selectbox("📂 Categoria", cat_options,
@@ -218,7 +256,6 @@ sent_options = ["Positivo", "Neutro", "Negativo"]
 sent_default = [s for s in prefs.get("sentiment_filter", []) if s in sent_options]
 sent = sb.multiselect("😊 Sentimento", sent_options, default=sent_default)
 
-busca = sb.text_input("🔍 Busca (título/resumo)", value=prefs.get("search_term", ""))
 st.session_state.setdefault("show_portfolio_only", False)
 if st.session_state.pop("_apply_portfolio_filter", False):
     st.session_state["show_portfolio_only"] = True
@@ -269,42 +306,43 @@ else:
 
 # ---------- KPIs ----------
 cnt = f["categoria"].value_counts()
-cols = st.columns(7)
-kpi(cols[0], "📰 Total de Notícias", len(f))
-kpi(cols[1], "🏛 Política", int(cnt.get("Política", 0)))
-kpi(cols[2], "📈 Mercado Financeiro", int(cnt.get("Mercado Financeiro", 0)))
-kpi(cols[3], "💻 Tecnologia", int(cnt.get("Tecnologia", 0)))
-kpi(cols[4], "🤖 Inteligência Artificial", int(cnt.get("Inteligência Artificial", 0)))
-kpi(cols[5], "😊 Sentimento Positivo", int((f["sentimento"] == "Positivo").sum()))
-kpi(cols[6], "⚠ Notícias Relevantes", int((f["tags"].map(len) >= 2).sum()))
-st.write("")
+with st.expander("📊 Visão Geral", expanded=True):
+    kpi_row([
+        ("📰 Total de Notícias", len(f)),
+        ("🏛 Política", int(cnt.get("Política", 0))),
+        ("📈 Mercado Financeiro", int(cnt.get("Mercado Financeiro", 0))),
+        ("💻 Tecnologia", int(cnt.get("Tecnologia", 0))),
+        ("🤖 Inteligência Artificial", int(cnt.get("Inteligência Artificial", 0))),
+        ("😊 Sentimento Positivo", int((f["sentimento"] == "Positivo").sum())),
+        ("⚠ Notícias Relevantes", int((f["tags"].map(len) >= 2).sum())),
+    ])
 
 # ---------- Portfolio KPIs (se carteira configurada) ----------
 if portfolio_list:
-    st.divider()
-    st.subheader("💼 Radar da Carteira")
     portfolio_news = portfolio.get_portfolio_news(f, portfolio_list)
     stats = portfolio.get_portfolio_stats(f, portfolio_list)
-    
-    pcols = st.columns(5)
-    kpi(pcols[0], "💼 Notícias da Carteira", stats["total_relevant"])
-    if pcols[0].button("🔍 Ver só essas", key="filter_portfolio_kpi", use_container_width=True):
-        st.session_state["_apply_portfolio_filter"] = True
-        st.rerun()
-    most_cited = stats["most_cited"] if stats["most_cited"] else "—"
-    kpi(pcols[1], "📊 Ativo Mais Citado", most_cited)
-    kpi(pcols[2], "🟢 Positivas", stats["sentiment_counts"]["Positivo"])
-    kpi(pcols[3], "🟡 Neutras", stats["sentiment_counts"]["Neutro"])
-    kpi(pcols[4], "🔴 Negativas", stats["sentiment_counts"]["Negativo"])
-    
-    if stats["ticker_rankings"]:
-        st.write("")
-        st.caption("📈 Ranking de Ativos Mais Citados")
-        ranking_df = pd.DataFrame(
-            [(f"#{i+1}. {ticker}", mentions) for i, (ticker, mentions) in enumerate(stats["ticker_rankings"][:5])],
-            columns=["Posição", "Menções"]
-        )
-        st.dataframe(ranking_df, hide_index=True, use_container_width=False)
+
+    with st.expander("💼 Radar da Carteira", expanded=True):
+        most_cited = stats["most_cited"] if stats["most_cited"] else "—"
+        kpi_row([
+            ("💼 Notícias da Carteira", stats["total_relevant"]),
+            ("📊 Ativo Mais Citado", most_cited),
+            ("🟢 Positivas", stats["sentiment_counts"]["Positivo"]),
+            ("🟡 Neutras", stats["sentiment_counts"]["Neutro"]),
+            ("🔴 Negativas", stats["sentiment_counts"]["Negativo"]),
+        ])
+        if st.button("🔍 Ver apenas notícias da carteira", key="filter_portfolio_kpi", width="stretch"):
+            st.session_state["_apply_portfolio_filter"] = True
+            st.rerun()
+
+        if stats["ticker_rankings"]:
+            st.write("")
+            st.caption("📈 Ranking de Ativos Mais Citados")
+            ranking_df = pd.DataFrame(
+                [(f"#{i+1}. {ticker}", mentions) for i, (ticker, mentions) in enumerate(stats["ticker_rankings"][:5])],
+                columns=["Posição", "Menções"]
+            )
+            st.dataframe(ranking_df, hide_index=True, width="content")
 
 if f.empty:
     st.info("Nenhuma notícia encontrada com os filtros atuais.")
@@ -318,11 +356,10 @@ else:
 with tab_news:
     c1, c2, c3 = st.columns([2, 1, 1])
     n = c1.slider("Quantidade exibida", 10, 100, 30, 10)
-    c2.download_button("⬇ CSV", export.to_csv(f), "noticias.csv", "text/csv", use_container_width=True)
+    c2.download_button("⬇ CSV", export.to_csv(f), "noticias.csv", "text/csv", width="stretch")
     c3.download_button("⬇ Excel", export.to_excel(f), "noticias.xlsx",
-                       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
-    for _, row in f.head(n).iterrows():
-        st.markdown(card(row), unsafe_allow_html=True)
+                       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", width="stretch")
+    render_news_list(f.head(n))
 
 if portfolio_list:
     with tab_portfolio:
@@ -333,12 +370,11 @@ if portfolio_list:
         else:
             c1, c2, c3 = st.columns([2, 1, 1])
             n_port = c1.slider("Quantidade exibida", 10, 100, 20, 10, key="portfolio_slider")
-            c2.download_button("⬇ CSV", export.to_csv(portfolio_news), "carteira_noticias.csv", "text/csv", use_container_width=True)
+            c2.download_button("⬇ CSV", export.to_csv(portfolio_news), "carteira_noticias.csv", "text/csv", width="stretch")
             c3.download_button("⬇ Excel", export.to_excel(portfolio_news), "carteira_noticias.xlsx",
-                               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+                               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", width="stretch")
             
-            for _, row in portfolio_news.head(n_port).iterrows():
-                st.markdown(card(row), unsafe_allow_html=True)
+            render_news_list(portfolio_news.head(n_port))
         
         # Gráfico de notícias por ativo
         st.divider()
@@ -369,7 +405,7 @@ if portfolio_list:
                     color="Notícias",
                     color_continuous_scale="Blues"
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
         else:
             st.info("Sem dados para exibir o gráfico.")
 
@@ -387,31 +423,31 @@ if portfolio_list:
                 barmode="stack",
                 color_discrete_map={"Positivo": "#3FB950", "Neutro": "#D29922", "Negativo": "#F85149"}
             )
-            st.plotly_chart(fig_sent, use_container_width=True)
+            st.plotly_chart(fig_sent, width="stretch")
         else:
             st.info("Sem dados de sentimento para exibir.")
 
 with tab_trend:
     a, b, c = st.columns(3)
     a.subheader("Assuntos mais citados")
-    a.dataframe(trends.top_tags(f), hide_index=True, use_container_width=True)
+    a.dataframe(trends.top_tags(f), hide_index=True, width="stretch")
     b.subheader("Empresas mais citadas")
-    b.dataframe(trends.top_companies(f), hide_index=True, use_container_width=True)
+    b.dataframe(trends.top_companies(f), hide_index=True, width="stretch")
     c.subheader("Pessoas mais citadas")
-    c.dataframe(trends.top_people(f), hide_index=True, use_container_width=True)
+    c.dataframe(trends.top_people(f), hide_index=True, width="stretch")
 
 with tab_an:
     r1a, r1b = st.columns(2)
-    r1a.plotly_chart(analytics.by_category(f), use_container_width=True)
-    r1b.plotly_chart(analytics.sentiment_donut(f), use_container_width=True)
-    st.plotly_chart(analytics.by_source(f), use_container_width=True)
+    r1a.plotly_chart(analytics.by_category(f), width="stretch")
+    r1b.plotly_chart(analytics.sentiment_donut(f), width="stretch")
+    st.plotly_chart(analytics.by_source(f), width="stretch")
     freq = st.radio("Granularidade", ["Dia", "Hora"], horizontal=True)
-    st.plotly_chart(analytics.timeline(f, "D" if freq == "Dia" else "h"), use_container_width=True)
+    st.plotly_chart(analytics.timeline(f, "D" if freq == "Dia" else "h"), width="stretch")
     r3a, r3b = st.columns(2)
     themes = trends.top_tags(f, 12)
     if not themes.empty:
-        r3a.plotly_chart(analytics.top_themes(themes), use_container_width=True)
-    r3b.plotly_chart(analytics.heatmap(f), use_container_width=True)
+        r3a.plotly_chart(analytics.top_themes(themes), width="stretch")
+    r3b.plotly_chart(analytics.heatmap(f), width="stretch")
 
 with tab_ai:
     st.caption("Baseline local. Preparado para OpenAI, Azure OpenAI e Gemini (ver src/summarizer.py).")

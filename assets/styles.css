@@ -1,18 +1,47 @@
 .stApp{background:#0D1117}
 section[data-testid="stSidebar"]{background:#161B22;border-right:1px solid #30363D}
 .hero h1{margin:0;font-size:1.9rem;color:#F0F6FC}.hero p{color:#8B949E;margin:.2rem 0 1rem}
-.kpi{background:#161B22;border:1px solid #30363D;border-radius:10px;padding:14px 16px;border-top:3px solid #58A6FF}
-.kpi .l{color:#8B949E;font-size:.78rem}.kpi .v{font-size:1.7rem;font-weight:700;color:#F0F6FC}
-.card{background:#161B22;border:1px solid #30363D;border-radius:10px;padding:16px;margin-bottom:12px;transition:.15s}
-.card:hover{border-color:#58A6FF;transform:translateY(-1px)}
-.card h4{margin:0 0 6px;color:#F0F6FC;font-size:1.05rem}.card p{color:#C9D1D9;font-size:.9rem;margin:6px 0}
-.meta{color:#8B949E;font-size:.78rem}
+.update-info{background:#161B22;border:1px solid #30363D;border-radius:10px;padding:8px 14px;color:#8B949E;font-size:.78rem;text-align:right;margin-top:4px}
+.update-info strong{color:#F0F6FC;font-size:.9rem}
+.kpi-row{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch}
+.kpi{background:#161B22;border:1px solid #30363D;border-radius:10px;padding:14px 16px;border-top:3px solid #58A6FF;flex:1 1 150px;min-width:150px}
+.kpi .l{color:#8B949E;font-size:.78rem;white-space:nowrap}.kpi .v{font-size:1.7rem;font-weight:700;color:#F0F6FC}
+.meta{color:#8B949E;font-size:.78rem;display:flex;flex-wrap:wrap;align-items:center;gap:4px}
 .badge{display:inline-block;padding:2px 9px;border-radius:12px;font-size:.72rem;margin-right:6px;border:1px solid #30363D}
 .b-Positivo{color:#3FB950;border-color:#3FB950}.b-Negativo{color:#F85149;border-color:#F85149}
 .b-Neutro{color:#D29922;border-color:#D29922}.b-cat{color:#58A6FF;border-color:#58A6FF}
 .b-portfolio{color:#A371F7;border-color:#A371F7;background-rgba(163,113,247,0.1)}
 .tag{color:#A371F7;font-size:.75rem;margin-right:6px}
-.card a{color:#58A6FF;text-decoration:none;font-size:.85rem}
 .skel{height:92px;border-radius:10px;margin-bottom:12px;background:linear-gradient(90deg,#161B22 25%,#21262D 50%,#161B22 75%);background-size:200% 100%;animation:sh 1.3s infinite}
 @keyframes sh{to{background-position:-200% 0}}
-@media(max-width:768px){.kpi .v{font-size:1.3rem}}
+.stTabs [data-baseweb="tab-list"]{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap}
+.stTabs [data-baseweb="tab"]{white-space:nowrap}
+
+/* Card de notícia (sempre visível, sem acordeão) */
+.card{background:#161B22;border:1px solid #30363D;border-radius:10px;padding:16px;margin-bottom:12px;transition:.15s}
+.card:hover{border-color:#58A6FF;transform:translateY(-1px)}
+.card h4{margin:0 0 6px;color:#F0F6FC;font-size:1.05rem;word-break:break-word}
+.card p{color:#C9D1D9;font-size:.9rem;margin:6px 0}
+.card a{color:#58A6FF;text-decoration:none;font-size:.85rem;display:inline-block;padding:6px 0}
+
+@media(max-width:768px){
+    .hero h1{font-size:1.4rem}
+    .hero p{font-size:.85rem}
+    .kpi-row{flex-wrap:wrap;overflow-x:visible}
+    .kpi{flex:1 1 45%;min-width:0;padding:10px 12px}
+    .kpi .l{font-size:.7rem}
+    .kpi .v{font-size:1.25rem}
+    .card{padding:12px}
+    .card h4{font-size:.98rem}
+    /* Alvos de toque maiores para botões de ícone (➕ ❌ 🗑) */
+    section[data-testid="stSidebar"] .stButton button{min-height:42px}
+}
+
+/* Lista de ativos da carteira: lixeira compacta e colada ao ticker */
+div[class*="st-key-portfolio_ticker_list"] [data-testid="stHorizontalBlock"]{gap:.25rem;align-items:center;flex-wrap:nowrap !important}
+div[class*="st-key-portfolio_ticker_list"] [data-testid="column"]{padding-top:0;padding-bottom:0;width:auto !important;min-width:0 !important}
+div[class*="st-key-portfolio_ticker_list"] [data-testid="column"]:first-child{flex:1 1 auto !important}
+div[class*="st-key-portfolio_ticker_list"] [data-testid="column"]:last-child{flex:0 0 auto !important}
+div[class*="st-key-portfolio_ticker_list"] .stButton{margin:0}
+div[class*="st-key-portfolio_ticker_list"] .stButton button{min-height:26px !important;height:26px;padding:0 8px;font-size:.75rem;line-height:1}
+div[class*="st-key-portfolio_ticker_list"] .stCaption{margin:2px 0}

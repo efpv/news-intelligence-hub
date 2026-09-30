@@ -3,6 +3,8 @@ __pycache__/
 *.pyc
 data/cache/*
 !data/cache/.gitkeep
+data/user_prefs/*
+!data/user_prefs/.gitkeep
 .env
 .streamlit/secrets.toml
 user_preferences.json

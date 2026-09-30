@@ -7,7 +7,7 @@ import streamlit as st
 
 # Tickers cuja base (sem dígitos) coincide com palavras comuns do português;
 # nesses casos exige-se o ticker completo (com dígito) para evitar falsos positivos.
-AMBIGUOUS_TICKER_BASES = {"VALE3", "AZUL4"}
+AMBIGUOUS_TICKER_BASES = {"VALE3", "AZUL4", "EVEN3"}
 
 # Mapeamento de tickers B3 para nomes de empresa e palavras-chave relacionadas
 # Preparado para futura substituição/enriquecimento via API (BRAPI, Status Invest, Fundamentus).
@@ -76,14 +76,25 @@ B3_COMPANIES = {
     "TIMS3": {"name": "TIM ON", "sector": "Telecomunicações", "keywords": ["tim brasil", "telecom"]},
     "SBSP3": {"name": "Sabesp ON", "sector": "Saneamento", "keywords": ["sabesp", "saneamento", "água"]},
     "KLBN11": {"name": "Klabin Unit", "sector": "Papel e Celulose", "keywords": ["klabin", "celulose", "papel"]},
-    "CYRE3": {"name": "Cyrela ON", "sector": "Construção Civil", "keywords": ["cyrela", "construção", "imóveis"]},
-    "MRVE3": {"name": "MRV ON", "sector": "Construção Civil", "keywords": ["mrv", "construção", "imóveis"]},
-    "EZTC3": {"name": "Eztec ON", "sector": "Construção Civil", "keywords": ["eztec", "construção", "imóveis"]},
+    "CYRE3": {"name": "Cyrela ON", "sector": "Construção Civil", "keywords": ["cyrela"]},
+    "MRVE3": {"name": "MRV ON", "sector": "Construção Civil", "keywords": ["mrv"]},
+    "EZTC3": {"name": "Eztec ON", "sector": "Construção Civil", "keywords": ["eztec"]},
     "BRAP4": {"name": "Bradespar PN", "sector": "Holding", "keywords": ["bradespar", "holding"]},
     "CSAN3": {"name": "Cosan ON", "sector": "Energia", "keywords": ["cosan", "combustíveis", "açúcar", "etanol"]},
     "UGPA3": {"name": "Ultrapar ON", "sector": "Energia", "keywords": ["ultrapar", "ipiranga", "combustíveis"]},
     "PRIO3": {"name": "PetroRio ON", "sector": "Energia", "keywords": ["petrorio", "petróleo", "óleo e gás"]},
     "VBBR3": {"name": "Vibra Energia ON", "sector": "Energia", "keywords": ["vibra", "br distribuidora", "combustíveis"]},
+    "CURY3": {"name": "Cury Construtora ON", "sector": "Construção Civil", "keywords": ["cury"]},
+    "DIRR3": {"name": "Direcional Engenharia ON", "sector": "Construção Civil", "keywords": ["direcional engenharia"]},
+    "EVEN3": {"name": "Even Construtora ON", "sector": "Construção Civil", "keywords": ["even construtora"]},
+    "TEND3": {"name": "Construtora Tenda ON", "sector": "Construção Civil", "keywords": ["construtora tenda"]},
+    "PLPL3": {"name": "Plano&Plano ON", "sector": "Construção Civil", "keywords": ["plano&plano"]},
+    "SMFT3": {"name": "Smart Fit ON", "sector": "Saúde e Bem-Estar", "keywords": ["smart fit", "academia", "fitness"]},
+    "HAPV3": {"name": "Hapvida ON", "sector": "Saúde", "keywords": ["hapvida", "plano de saúde", "saúde"]},
+    "RDOR3": {"name": "Rede D'Or São Luiz ON", "sector": "Saúde", "keywords": ["rede d'or", "hospital", "saúde"]},
+    "ASAI3": {"name": "Assaí Atacadista ON", "sector": "Varejo", "keywords": ["assaí", "atacadista", "varejo"]},
+    "CRFB3": {"name": "Carrefour Brasil ON", "sector": "Varejo", "keywords": ["carrefour", "supermercado", "varejo"]},
+    "NTCO3": {"name": "Natura &Co ON", "sector": "Cosméticos", "keywords": ["natura", "cosméticos", "avon"]},
 }
 
 RELEVANCE_KEYWORDS = {
@@ -235,30 +246,30 @@ def classify_relevance(title: str, summary: str, portfolio: list[str]) -> dict[s
     
     # Verifica tickers e empresas mencionadas
     for ticker in portfolio:
-        if ticker in B3_COMPANIES:
-            company_data = B3_COMPANIES[ticker]
-            keywords = company_data["keywords"]
-            base = ticker[:-1]  # Ex: PETR4 -> PETR
+        company_data = B3_COMPANIES.get(ticker, {})
+        keywords = company_data.get("keywords", [])
+        company_name = company_data.get("name", ticker)
+        base = ticker[:-1]  # Ex: PETR4 -> PETR
 
-            # Verifica ticker direto (com dígito sempre; base isolada só se não for ambígua)
-            ticker_matched = _contains_word(text, ticker.lower())
-            if not ticker_matched and ticker not in AMBIGUOUS_TICKER_BASES:
-                ticker_matched = _contains_word(text, base.lower())
+        # Verifica ticker direto (com dígito sempre; base isolada só se não for ambígua)
+        ticker_matched = _contains_word(text, ticker.lower())
+        if not ticker_matched and ticker not in AMBIGUOUS_TICKER_BASES:
+            ticker_matched = _contains_word(text, base.lower())
 
-            if ticker_matched:
-                relevance_score += 50
-                matched_tickers.append(ticker)
-                matched_companies.append(company_data["name"])
-            
-            # Verifica palavras-chave da empresa
-            for keyword in keywords:
-                if _contains_word(text, keyword.lower()):
-                    relevance_score += 30
-                    if company_data["name"] not in matched_companies:
-                        matched_companies.append(company_data["name"])
-                    if ticker not in matched_tickers:
-                        matched_tickers.append(ticker)
-                    break  # Conta apenas uma vez por empresa
+        if ticker_matched:
+            relevance_score += 50
+            matched_tickers.append(ticker)
+            matched_companies.append(company_name)
+
+        # Verifica palavras-chave da empresa (tickers fora do catálogo não têm keywords)
+        for keyword in keywords:
+            if _contains_word(text, keyword.lower()):
+                relevance_score += 30
+                if company_name not in matched_companies:
+                    matched_companies.append(company_name)
+                if ticker not in matched_tickers:
+                    matched_tickers.append(ticker)
+                break  # Conta apenas uma vez por empresa
     
     # Verifica palavras-chave de alta relevância geral
     high_relevance_words = ["resultados", "dividendo", "earnings", "fusão", "aquisição"]
@@ -343,7 +354,6 @@ def get_portfolio_stats(df: pd.DataFrame, portfolio: list[str]) -> dict:
     }
 
 
-@st.cache_data(ttl=300)
 def get_portfolio_news(df: pd.DataFrame, portfolio: list[str]) -> pd.DataFrame:
     """Retorna notícias relevantes para a carteira com classificação de relevância."""
     if not portfolio:
@@ -370,7 +380,6 @@ def get_portfolio_news(df: pd.DataFrame, portfolio: list[str]) -> pd.DataFrame:
     return result
 
 
-@st.cache_data(ttl=300)
 def get_sentiment_by_asset(df: pd.DataFrame, portfolio: list[str]) -> pd.DataFrame:
     """Agrega contagem de sentimento por ativo monitorado."""
     if not portfolio:
