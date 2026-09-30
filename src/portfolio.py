@@ -1,6 +1,8 @@
 """Gerenciamento de portfólio de investimentos B3."""
+import json
 import re
 import unicodedata
+from typing import Any
 
 import pandas as pd
 import streamlit as st
@@ -208,19 +210,22 @@ def remove_from_portfolio(portfolio_list: list[str], ticker: str) -> list[str]:
     return [t for t in portfolio_list if t != ticker]
 
 
-def export_portfolio_csv(portfolio_list: list[str]) -> bytes:
-    """Gera CSV (ticker, empresa, setor) para backup/reimportação da carteira."""
-    rows = [{"ticker": t, "empresa": B3_COMPANIES.get(t, {}).get("name", ""),
-             "setor": B3_COMPANIES.get(t, {}).get("sector", "")} for t in portfolio_list]
-    df = pd.DataFrame(rows, columns=["ticker", "empresa", "setor"])
-    return df.to_csv(index=False).encode("utf-8-sig")
+FILTER_KEYS = ["selected_category", "selected_sources", "sentiment_filter", "search_term", "period"]
 
 
-def import_portfolio_csv(uploaded_file) -> list[str]:
-    """Lê um CSV exportado previamente e retorna a lista de tickers normalizada."""
-    df = pd.read_csv(uploaded_file)
-    ticker_col = next((c for c in df.columns if c.strip().lower() == "ticker"), df.columns[0])
-    tickers = [str(t).strip().upper() for t in df[ticker_col].dropna()]
+def export_backup(portfolio_list: list[str], filters: dict[str, Any]) -> bytes:
+    """Gera um backup JSON com a carteira e os filtros de notícias para reimportação."""
+    payload = {
+        "portfolio": portfolio_list,
+        "filters": {k: filters.get(k) for k in FILTER_KEYS},
+    }
+    return json.dumps(payload, indent=2, ensure_ascii=False).encode("utf-8")
+
+
+def import_backup(uploaded_file) -> tuple[list[str], dict[str, Any]]:
+    """Lê um backup JSON exportado previamente e retorna (tickers normalizados, filtros)."""
+    data = json.load(uploaded_file)
+    tickers = [str(t).strip().upper() for t in data.get("portfolio", [])]
 
     seen = set()
     result = []
@@ -228,7 +233,9 @@ def import_portfolio_csv(uploaded_file) -> list[str]:
         if ticker and ticker not in seen:
             seen.add(ticker)
             result.append(ticker)
-    return result
+
+    filters = {k: v for k, v in data.get("filters", {}).items() if k in FILTER_KEYS}
+    return result, filters
 
 
 def _contains_word(text: str, word: str) -> bool:

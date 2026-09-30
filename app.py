@@ -1,4 +1,5 @@
 """News Intelligence Hub — Radar Político, Financeiro & Tecnologia."""
+import json
 import time
 from datetime import date, timedelta
 from html import escape
@@ -7,14 +8,64 @@ from pathlib import Path
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+import streamlit.components.v1 as components
 
 from src import analytics, config, export, portfolio, preferences, rss_reader, summarizer, trends
 
 st.set_page_config(page_title="News Intelligence Hub", page_icon="📡", layout="wide")
 st.markdown(f"<style>{(Path(__file__).parent / 'assets/styles.css').read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
 
+
+def inject_pwa() -> None:
+    """Registra manifest, ícones e service worker no documento pai (a página real, não o iframe do componente)."""
+    components.html(
+        """
+        <script>
+        (function() {
+            const doc = window.parent.document;
+            if (doc.getElementById('nih-pwa-manifest')) return;
+
+            const manifest = doc.createElement('link');
+            manifest.id = 'nih-pwa-manifest';
+            manifest.rel = 'manifest';
+            manifest.href = '/app/static/manifest.json';
+            doc.head.appendChild(manifest);
+
+            const theme = doc.createElement('meta');
+            theme.name = 'theme-color';
+            theme.content = '#0D1117';
+            doc.head.appendChild(theme);
+
+            const appleIcon = doc.createElement('link');
+            appleIcon.rel = 'apple-touch-icon';
+            appleIcon.href = '/app/static/icons/icon-192.png';
+            doc.head.appendChild(appleIcon);
+
+            const appleCapable = doc.createElement('meta');
+            appleCapable.name = 'apple-mobile-web-app-capable';
+            appleCapable.content = 'yes';
+            doc.head.appendChild(appleCapable);
+
+            const appleTitle = doc.createElement('meta');
+            appleTitle.name = 'apple-mobile-web-app-title';
+            appleTitle.content = 'NIH';
+            doc.head.appendChild(appleTitle);
+
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/app/static/service-worker.js').catch(console.warn);
+            }
+        })();
+        </script>
+        """,
+        height=0,
+    )
+
+
+inject_pwa()
+
 # Inicializa preferências do usuário
 preferences.init_session_state()
+
 
 # Inicializa controle de atualização automática
 if "_last_refresh_time" not in st.session_state:
@@ -78,11 +129,20 @@ def auto_refresh_checker() -> None:
 
 
 # ---------- Header + carga ----------
-hcol1, hcol2 = st.columns([3, 1])
+hcol1, hcol2 = st.columns([1.6, 1])
 with hcol1:
     st.markdown('<div class="hero"><h1>📡 News Intelligence Hub</h1>'
                 '<p>Radar Político, Financeiro & Tecnologia — monitoramento em tempo real via RSS</p></div>', unsafe_allow_html=True)
-update_slot = hcol2.empty()
+with hcol2:
+    with st.container(key="update_info_card"):
+        info_col, btn_col = st.columns([6, 1], vertical_alignment="center")
+        with info_col:
+            update_slot = st.empty()
+        with btn_col:
+            reload_clicked = st.button("🔄", key="reload_page_btn")
+    if reload_clicked:
+        st.cache_data.clear()
+        st.rerun()
 slot = st.empty()
 slot.markdown('<div class="skel"></div>' * 3, unsafe_allow_html=True)
 with st.spinner("Coletando notícias…"):
@@ -90,7 +150,7 @@ with st.spinner("Coletando notícias…"):
 slot.empty()
 check_refresh()
 auto_refresh_checker()
-update_slot.markdown(f'<div class="update-info">🕒 Última atualização<br><strong>{fetched_at:%d/%m %H:%M}</strong></div>', unsafe_allow_html=True)
+update_slot.markdown(f'<span class="update-info-line">🕒 Última atualização • <strong>{fetched_at:%d/%m %H:%M}</strong></span>', unsafe_allow_html=True)
 
 # ---------- Persistência de preferências por e-mail ----------
 if st.session_state.get("email"):
@@ -196,26 +256,27 @@ with sb.expander("💼 Minha Carteira", expanded=False):
     if not st.session_state.get("_user_id"):
         st.caption("💡 Salve suas preferências com um e-mail (no topo da página) para não perdê-las ao fechar o navegador.")
 
-    # ---------- Backup da Carteira (CSV) ----------
+    # ---------- Backup da Carteira e Filtros (JSON) ----------
     if portfolio_list:
         st.download_button(
-            "⬇ Exportar Carteira (CSV)",
-            portfolio.export_portfolio_csv(portfolio_list),
-            "minha_carteira.csv", "text/csv", width="stretch"
+            "⬇ Exportar Carteira e Filtros",
+            portfolio.export_backup(portfolio_list, st.session_state.preferences),
+            "minha_carteira.json", "application/json", width="stretch"
         )
 
-    csv_upload = st.file_uploader("⬆ Importar Carteira (CSV)", type="csv", key="portfolio_csv_uploader")
-    if csv_upload is not None:
+    backup_upload = st.file_uploader("⬆ Importar Carteira e Filtros", type="json", key="portfolio_backup_uploader")
+    if backup_upload is not None:
         try:
-            imported = portfolio.import_portfolio_csv(csv_upload)
+            imported_tickers, imported_filters = portfolio.import_backup(backup_upload)
             merged = portfolio_list[:]
-            for t in imported:
+            for t in imported_tickers:
                 merged = portfolio.add_to_portfolio(merged, t)
-            if merged != portfolio_list:
-                preferences.update_preference("portfolio", merged)
-                st.toast(f"✅ {len(imported)} ativo(s) importado(s)!", icon="✅")
-                st.rerun()
-        except (ValueError, KeyError) as e:
+            st.session_state.preferences["portfolio"] = merged
+            st.session_state.preferences.update(imported_filters)
+            preferences.save_preferences(st.session_state.preferences)
+            st.toast(f"✅ {len(imported_tickers)} ativo(s) e filtros importados!", icon="✅")
+            st.rerun()
+        except (ValueError, KeyError, json.JSONDecodeError) as e:
             st.warning(f"⚠️ CSV inválido: {e}")
 
 # ---------- Filtros de Notícias ----------
@@ -306,7 +367,7 @@ else:
 
 # ---------- KPIs ----------
 cnt = f["categoria"].value_counts()
-with st.expander("📊 Visão Geral", expanded=True):
+with st.expander("📊 Visão Geral", expanded=False):
     kpi_row([
         ("📰 Total de Notícias", len(f)),
         ("🏛 Política", int(cnt.get("Política", 0))),
@@ -354,11 +415,7 @@ else:
     tab_news, tab_trend, tab_an, tab_ai = st.tabs(["📰 Notícias", "🔥 Trending Topics", "📊 Painel Analítico", "🧠 Resumo Executivo"])
 
 with tab_news:
-    c1, c2, c3 = st.columns([2, 1, 1])
-    n = c1.slider("Quantidade exibida", 10, 100, 30, 10)
-    c2.download_button("⬇ CSV", export.to_csv(f), "noticias.csv", "text/csv", width="stretch")
-    c3.download_button("⬇ Excel", export.to_excel(f), "noticias.xlsx",
-                       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", width="stretch")
+    n = st.slider("Quantidade exibida", 10, 100, 30, 10)
     render_news_list(f.head(n))
 
 if portfolio_list:

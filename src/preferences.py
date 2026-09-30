@@ -111,15 +111,32 @@ def save_preferences(prefs: dict[str, Any]) -> None:
         st.warning(f"⚠️ Não foi possível salvar preferências: {e}")
 
 
+@st.fragment
+def _autologin_from_cookie() -> None:
+    """Tenta logar com o e-mail do cookie assim que o navegador o entregar.
+
+    O componente de cookies só retorna o valor real numa atualização posterior à
+    primeira renderização; isolar essa leitura num fragmento evita que a página
+    inteira grave `email=None` na sessão antes desse valor chegar.
+    """
+    if st.session_state.get("email"):
+        return
+    email = get_saved_email()
+    if email:
+        login_with_email(email)
+        st.rerun()
+
+
 def init_session_state() -> None:
     """Inicializa session_state com preferências do usuário atual (se houver e-mail salvo em cookie)."""
     if "email" not in st.session_state:
-        st.session_state["email"] = get_saved_email()
-        st.session_state["_user_id"] = _email_to_id(st.session_state["email"]) if st.session_state["email"] else None
+        st.session_state["email"] = None
+        st.session_state["_user_id"] = None
 
     if "preferences" not in st.session_state:
-        user_id = st.session_state.get("_user_id")
-        st.session_state.preferences = load_preferences(user_id) if user_id else get_default_preferences()
+        st.session_state.preferences = get_default_preferences()
+
+    _autologin_from_cookie()
 
     # Garante que todas as chaves estão presentes
     defaults = get_default_preferences()
