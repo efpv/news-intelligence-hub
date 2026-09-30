@@ -322,14 +322,20 @@ if st.session_state.pop("_apply_portfolio_filter", False):
     st.session_state["show_portfolio_only"] = True
 show_portfolio_only = sb.checkbox("💼 Apenas minha carteira", key="show_portfolio_only") if portfolio_list else False
 
-# Persiste filtros quando alterados
+# Persiste filtros quando alterados (em memória, para refletir na filtragem abaixo)
 current_filters = {
     "selected_category": cat, "selected_sources": fontes,
     "sentiment_filter": sent, "search_term": busca, "period": periodo
 }
 if any(prefs.get(k) != v for k, v in current_filters.items()):
     prefs.update(current_filters)
-    preferences.save_preferences(prefs)
+
+if sb.button("💾 Salvar Filtros", key="save_filters_btn", width="stretch"):
+    if st.session_state.get("_user_id"):
+        preferences.save_preferences(prefs)
+        st.toast("✅ Filtros salvos!", icon="✅")
+    else:
+        st.warning("⚠️ Salve suas preferências com um e-mail (no topo da página) antes de salvar os filtros.")
 
 now = pd.Timestamp.now(tz=config.TIMEZONE)
 if periodo == "Personalizado":
