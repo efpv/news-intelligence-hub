@@ -2,6 +2,7 @@
 import json
 import re
 import unicodedata
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -10,6 +11,8 @@ import streamlit as st
 # Tickers cuja base (sem dígitos) coincide com palavras comuns do português;
 # nesses casos exige-se o ticker completo (com dígito) para evitar falsos positivos.
 AMBIGUOUS_TICKER_BASES = {"VALE3", "AZUL4", "EVEN3"}
+
+B3_TICKERS_FILE = Path(__file__).parent.parent / "data" / "b3_tickers.json"
 
 # Mapeamento de tickers B3 para nomes de empresa e palavras-chave relacionadas
 # Preparado para futura substituição/enriquecimento via API (BRAPI, Status Invest, Fundamentus).
@@ -121,11 +124,41 @@ def _normalize_text(text: str) -> str:
 
 @st.cache_data(ttl=86400)
 def get_asset_catalog() -> list[dict]:
-    """Catálogo de ativos B3 disponível para busca. Hoje local; ponto único de troca por API (BRAPI etc.)."""
-    return [
-        {"ticker": ticker, "company": data["name"], "sector": data.get("sector", "")}
-        for ticker, data in B3_COMPANIES.items()
-    ]
+    """Catálogo completo da B3 (data/b3_tickers.json), com nome/setor/keywords curados sobrepostos."""
+    assets: dict[str, dict] = {}
+    if B3_TICKERS_FILE.exists():
+        try:
+            for a in json.loads(B3_TICKERS_FILE.read_text(encoding="utf-8")).get("assets", []):
+                name = a.get("name") or a["ticker"]
+                assets[a["ticker"]] = {"ticker": a["ticker"], "company": name,
+                                       "sector": a.get("sector", ""), "keywords": []}
+        except (json.JSONDecodeError, KeyError, OSError):
+            pass
+
+    for ticker, data in B3_COMPANIES.items():
+        assets[ticker] = {"ticker": ticker, "company": data["name"],
+                          "sector": data.get("sector", ""), "keywords": data.get("keywords", [])}
+
+    catalog = sorted(assets.values(), key=lambda a: (a["ticker"] not in B3_COMPANIES, a["ticker"]))
+    for a in catalog:
+        a["_norm_ticker"] = _normalize_text(a["ticker"])
+        a["_norm_name"] = _normalize_text(a["company"])
+        a["_norm_sector"] = _normalize_text(a["sector"])
+        a["_norm_keywords"] = [_normalize_text(k) for k in a["keywords"]]
+    return catalog
+
+
+def get_company_name(ticker: str) -> str:
+    """Nome da empresa para um ticker; devolve o próprio ticker se não estiver no catálogo."""
+    for a in get_asset_catalog():
+        if a["ticker"] == ticker:
+            return a["company"]
+    return ticker
+
+
+def asset_label(asset: dict) -> str:
+    """Texto exibido no combobox: 'TICKER — Empresa' (omite o nome quando é igual ao ticker)."""
+    return asset["ticker"] if asset["company"] == asset["ticker"] else f"{asset['ticker']} — {asset['company']}"
 
 
 def search_assets(query: str, limit: int = 8) -> list[dict]:
@@ -139,12 +172,11 @@ def search_assets(query: str, limit: int = 8) -> list[dict]:
 
     for asset in catalog:
         ticker = asset["ticker"]
-        data = B3_COMPANIES.get(ticker, {})
-        norm_ticker = _normalize_text(ticker)
+        norm_ticker = asset["_norm_ticker"]
         norm_ticker_base = norm_ticker.rstrip("0123456789")
-        norm_name = _normalize_text(data.get("name", ""))
-        norm_sector = _normalize_text(data.get("sector", ""))
-        norm_keywords = [_normalize_text(k) for k in data.get("keywords", [])]
+        norm_name = asset["_norm_name"]
+        norm_sector = asset["_norm_sector"]
+        norm_keywords = asset["_norm_keywords"]
 
         score = 0
         if norm_query == norm_ticker or norm_query == norm_ticker_base:
@@ -163,8 +195,8 @@ def search_assets(query: str, limit: int = 8) -> list[dict]:
             score = 30
 
         if score > 0:
-            results.append({"ticker": ticker, "company": data.get("name", ""),
-                             "sector": data.get("sector", ""), "score": score})
+            results.append({"ticker": ticker, "company": asset["company"],
+                             "sector": asset["sector"], "score": score})
 
     results.sort(key=lambda x: (-x["score"], x["ticker"]))
     return results[:limit]
@@ -210,7 +242,7 @@ def remove_from_portfolio(portfolio_list: list[str], ticker: str) -> list[str]:
     return [t for t in portfolio_list if t != ticker]
 
 
-FILTER_KEYS = ["selected_category", "selected_sources", "sentiment_filter", "search_term", "period"]
+FILTER_KEYS = ["selected_category", "selected_sources", "sentiment_filter", "search_term", "period", "refresh_option"]
 
 
 def export_backup(portfolio_list: list[str], filters: dict[str, Any]) -> bytes:

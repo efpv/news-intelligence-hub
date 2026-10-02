@@ -195,35 +195,32 @@ if sb.button("🔄 Atualizar Notícias Agora", width="stretch"):
 with sb.expander("💼 Minha Carteira", expanded=False):
     portfolio_list = st.session_state.preferences.get("portfolio", [])
 
-    search_query = st.text_input(
-        "Buscar ativo",
-        placeholder="Digite o nome da empresa ou ticker...",
-        key="asset_search",
-        label_visibility="collapsed"
-    )
+    asset_catalog = portfolio.get_asset_catalog()
+    asset_options = {portfolio.asset_label(a): a["ticker"] for a in asset_catalog}
 
-    if search_query:
-        matches = portfolio.search_assets(search_query)
-        if matches:
-            for m in matches:
-                already_added = m["ticker"] in portfolio_list
-                mcol1, mcol2 = st.columns([4, 1])
-                mcol1.caption(f"{m['ticker']} - {m['company']}")
-                if already_added:
-                    mcol2.caption("✅")
-                elif mcol2.button("➕", key=f"add_{m['ticker']}"):
-                    portfolio_list = portfolio.add_to_portfolio(portfolio_list, m["ticker"])
-                    preferences.update_preference("portfolio", portfolio_list)
-                    st.rerun()
-        else:
-            st.caption("Nenhum ativo encontrado.")
+    def _add_selected_asset() -> None:
+        label = st.session_state.get("asset_picker")
+        if label:
+            current = st.session_state.preferences.get("portfolio", [])
+            preferences.update_preference("portfolio", portfolio.add_to_portfolio(current, asset_options[label]))
+        st.session_state["asset_picker"] = None
+
+    st.selectbox(
+        "Buscar ativo",
+        list(asset_options),
+        index=None,
+        placeholder="Digite o ticker ou o nome da empresa...",
+        key="asset_picker",
+        on_change=_add_selected_asset,
+        label_visibility="collapsed",
+    )
 
     st.write("")
     if portfolio_list:
         st.caption(f"📊 {len(portfolio_list)} ativo(s) monitorado(s)")
         with st.container(key="portfolio_ticker_list"):
             for ticker in portfolio_list:
-                company_name = portfolio.B3_COMPANIES.get(ticker, {}).get("name", ticker)
+                company_name = portfolio.get_company_name(ticker)
                 pcol1, pcol2 = st.columns([4, 1], gap="small")
                 pcol1.caption(f"✅ **{ticker}** - {company_name}")
                 if pcol2.button("🗑", key=f"rm_{ticker}", width="content"):
@@ -298,10 +295,12 @@ with col1:
                         key="periodo_radio")
 
 with col2:
+    refresh_options = list(config.REFRESH_INTERVALS.keys())
+    refresh_default = prefs.get("refresh_option", "1 hora")
     refresh_option = st.radio(
         "⏱ Atualizar",
-        options=list(config.REFRESH_INTERVALS.keys()),
-        index=4,
+        options=refresh_options,
+        index=refresh_options.index(refresh_default) if refresh_default in refresh_options else 4,
         key="refresh_radio",
         help="Frequência de atualização automática"
     )
@@ -322,20 +321,14 @@ if st.session_state.pop("_apply_portfolio_filter", False):
     st.session_state["show_portfolio_only"] = True
 show_portfolio_only = sb.checkbox("💼 Apenas minha carteira", key="show_portfolio_only") if portfolio_list else False
 
-# Persiste filtros quando alterados (em memória, para refletir na filtragem abaixo)
+# Persiste filtros quando alterados
 current_filters = {
     "selected_category": cat, "selected_sources": fontes,
-    "sentiment_filter": sent, "search_term": busca, "period": periodo
+    "sentiment_filter": sent, "search_term": busca, "period": periodo, "refresh_option": refresh_option
 }
 if any(prefs.get(k) != v for k, v in current_filters.items()):
     prefs.update(current_filters)
-
-if sb.button("💾 Salvar Filtros", key="save_filters_btn", width="stretch"):
-    if st.session_state.get("_user_id"):
-        preferences.save_preferences(prefs)
-        st.toast("✅ Filtros salvos!", icon="✅")
-    else:
-        st.warning("⚠️ Salve suas preferências com um e-mail (no topo da página) antes de salvar os filtros.")
+    preferences.save_preferences(prefs)
 
 now = pd.Timestamp.now(tz=config.TIMEZONE)
 if periodo == "Personalizado":

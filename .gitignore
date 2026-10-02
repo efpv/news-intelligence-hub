@@ -8,4 +8,5 @@ data/user_prefs/*
 .env
 .streamlit/secrets.toml
 user_preferences.json
+gen-lang-client-0212090701-9495c5662819.json
 

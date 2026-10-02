@@ -14,6 +14,8 @@ from typing import Any
 import extra_streamlit_components as stx
 import streamlit as st
 
+from src import sheets_store
+
 PREFERENCES_DIR = Path(__file__).parent.parent / "data" / "user_prefs"
 _EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _EMAIL_COOKIE = "nih_email"
@@ -95,12 +97,14 @@ def login_with_email(email: str) -> bool:
                         key=f"set_email_{_email_to_id(email)}")
 
     user_id = _email_to_id(email)
-    from_file = load_preferences(user_id)
+    candidates = [load_preferences(user_id)]
     from_cookie = _get_saved_preferences_from_cookie()
-    if from_cookie and from_cookie.get("last_update", "") > from_file.get("last_update", ""):
-        prefs = from_cookie
-    else:
-        prefs = from_file
+    if from_cookie:
+        candidates.append(from_cookie)
+    from_sheet = _load_from_sheet(user_id)
+    if from_sheet:
+        candidates.append(from_sheet)
+    prefs = max(candidates, key=lambda p: p.get("last_update", ""))
 
     st.session_state["email"] = email
     st.session_state["_user_id"] = user_id
@@ -116,6 +120,7 @@ def logout() -> None:
     cookie_manager.delete(_PREFS_COOKIE, key="delete_prefs_cookie")
     st.session_state["email"] = None
     st.session_state["_user_id"] = None
+    st.session_state.pop("_sheets_signature", None)
     st.session_state.preferences = get_default_preferences()
 
 
@@ -141,6 +146,7 @@ def get_default_preferences() -> dict[str, Any]:
         "sentiment_filter": [],
         "search_term": "",
         "period": "Últimos 7 dias",
+        "refresh_option": "1 hora",
         "last_update": datetime.now().isoformat()
     }
 
@@ -163,6 +169,31 @@ def save_preferences(prefs: dict[str, Any]) -> None:
 
     _get_cookie_manager().set(_PREFS_COOKIE, _encode_prefs_cookie(prefs),
                                expires_at=datetime.now() + timedelta(days=365), key="set_prefs_cookie")
+    _save_to_sheet(user_id, prefs)
+
+
+def _load_from_sheet(user_id: str) -> dict[str, Any] | None:
+    if not sheets_store.is_configured():
+        return None
+    try:
+        return sheets_store.load_preferences(user_id)
+    except Exception as e:  # falha de rede/permissão não deve derrubar o app
+        st.warning(f"⚠️ Não foi possível ler a planilha: {e}")
+        return None
+
+
+def _save_to_sheet(user_id: str, prefs: dict[str, Any]) -> None:
+    """Grava na planilha só quando algo mudou (evita estourar a cota de escritas da API)."""
+    if not sheets_store.is_configured():
+        return
+    signature = json.dumps({k: v for k, v in prefs.items() if k != "last_update"}, sort_keys=True, ensure_ascii=False)
+    if st.session_state.get("_sheets_signature") == signature:
+        return
+    try:
+        sheets_store.save_preferences(user_id, st.session_state.get("email", ""), prefs)
+        st.session_state["_sheets_signature"] = signature
+    except Exception as e:
+        st.warning(f"⚠️ Não foi possível salvar na planilha: {e}")
 
 
 @st.fragment
