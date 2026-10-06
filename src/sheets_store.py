@@ -10,7 +10,7 @@ from google.oauth2.service_account import Credentials
 DEFAULT_SPREADSHEET = "news_intelligence_hub_data"
 _SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 _FILTER_COLUMNS = ["selected_category", "selected_sources", "sentiment_filter", "search_term", "period", "refresh_option"]
-_JSON_COLUMNS = {"selected_sources", "sentiment_filter"}
+_JSON_COLUMNS = {"selected_category", "selected_sources", "sentiment_filter"}
 
 
 def is_configured() -> bool:

@@ -140,13 +140,17 @@ def load_preferences(user_id: str) -> dict[str, Any]:
 def get_default_preferences() -> dict[str, Any]:
     """Retorna estrutura padrão de preferências."""
     return {
-        "portfolio": [],
-        "selected_category": "Todas",
+        "portfolio": [
+            "BBDC4", "BBAS3", "ITSA4", "PETR4", "CURY3", "CMIG4",
+            "TAEE11", "BBSE3", "SAPR4", "KLBN4", "COGN3", "BHIA3",
+            "PRIO3", "GARE11", "VGHF11", "MXRF11", "KISU11", "TRXF11",
+        ],
+        "selected_category": [],
         "selected_sources": [],
         "sentiment_filter": [],
         "search_term": "",
-        "period": "Últimos 7 dias",
-        "refresh_option": "1 hora",
+        "period": "Últimas 24h",
+        "refresh_option": "10 minutos",
         "last_update": datetime.now().isoformat()
     }
 
@@ -242,4 +246,3 @@ def reset_preferences() -> None:
     """Reseta todas as preferências para os valores padrão."""
     st.session_state.preferences = get_default_preferences()
     save_preferences(st.session_state.preferences)
-

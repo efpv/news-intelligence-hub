@@ -1,0 +1,31 @@
+name: Abrir Pull Request
+
+# A cada push em uma branch diferente de main, abre um PR para main (se ainda não existir).
+on:
+  push:
+    branches-ignore: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  open-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Criar PR se não existir
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          existing=$(gh pr list --head "$BRANCH" --base main --state open --json number --jq 'length')
+          if [ "$existing" = "0" ]; then
+            title=$(printf '%s' "$COMMIT_MSG" | head -n1)
+            gh pr create --base main --head "$BRANCH" \
+              --title "${title:-Atualizações de $BRANCH}" \
+              --body "PR criado automaticamente a partir de \`$BRANCH\`. O merge só deve ocorrer com o check **tests** aprovado."
+          else
+            echo "PR já existe para $BRANCH"
+          fi
