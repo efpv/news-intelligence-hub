@@ -2,7 +2,7 @@
 Radar Político, Financeiro & Tecnologia — dashboard Streamlit que consolida feeds RSS (política, economia, mercado, tecnologia e IA) com análise de sentimento, tags automáticas, tendências e exportação.
 
 ## Funcionalidades
-Filtros (categoria, fonte, período, sentimento, busca) · 7 KPIs · cards de notícia · tags automáticas · Trending Topics · 6 gráficos Plotly · exportação CSV/Excel · coleta automática de hora em hora (cache 1h + botão de atualização manual) · filtro "Última hora" · tratamento de erros por feed · módulo de resumo executivo (pronto para LLM).
+Filtros (categoria, fonte, período, sentimento, busca) · 7 KPIs · cards de notícia · tags automáticas · Trending Topics · 6 gráficos Plotly · exportação CSV/Excel · coleta automática a cada 10 minutos (cache 5 min + botão de atualização manual) · filtro "Última hora" · tratamento de erros por feed · módulo de resumo executivo (pronto para LLM).
 
 ## Tecnologias
 Python 3.12+, Streamlit, feedparser, pandas, requests, BeautifulSoup4, Plotly, TextBlob, OpenPyXL.

@@ -71,12 +71,12 @@ preferences.init_session_state()
 if "_last_refresh_time" not in st.session_state:
     st.session_state["_last_refresh_time"] = time.time()
 if "refresh_interval" not in st.session_state:
-    st.session_state["refresh_interval"] = 3600  # 1 hora por padrão
+    st.session_state["refresh_interval"] = 600  # 10 minutos por padrão
 
 
 @st.cache_data(ttl=config.CACHE_TTL, show_spinner=False)
-def load_news() -> tuple[pd.DataFrame, list[str], pd.Timestamp]:
-    df, errors = rss_reader.fetch_all()
+def load_news(categories: tuple[str, ...] = ()) -> tuple[pd.DataFrame, list[str], pd.Timestamp]:
+    df, errors = rss_reader.fetch_all(categories)
     return df, errors, pd.Timestamp.now(tz=config.TIMEZONE)
 
 
@@ -145,8 +145,16 @@ with hcol2:
         st.rerun()
 slot = st.empty()
 slot.markdown('<div class="skel"></div>' * 3, unsafe_allow_html=True)
+def _saved_categories() -> list[str]:
+    saved = st.session_state.preferences.get("selected_category", [])
+    if isinstance(saved, str):  # formato antigo: valor único ("Todas" = sem filtro)
+        return [] if saved == "Todas" else [saved]
+    return list(saved)
+
+
 with st.spinner("Coletando notícias…"):
-    df, errors, fetched_at = load_news()
+    selected_cats = tuple(sorted(st.session_state.get("cat_filter", _saved_categories())))
+    df, errors, fetched_at = load_news(selected_cats)
 slot.empty()
 check_refresh()
 auto_refresh_checker()
@@ -280,14 +288,13 @@ with sb.expander("💼 Minha Carteira", expanded=False):
 sb.subheader("🔎 Filtros de Notícias")
 sb.caption("Customize como deseja ver as notícias")
 
-cat_options = ["Todas"] + config.CATEGORIES
-cat_default = prefs.get("selected_category", "Todas")
-cat = sb.selectbox("📂 Categoria", cat_options,
-                    index=cat_options.index(cat_default) if cat_default in cat_options else 0)
+cat_options = config.CATEGORIES + sorted({f.category for f in config.FEEDS} - set(config.CATEGORIES))
+cat_default = [c for c in _saved_categories() if c in cat_options]
+cat = sb.multiselect("📂 Categoria", cat_options, default=cat_default, placeholder="Todas", key="cat_filter")
 
 # ===== CONTROLES DE TEMPO (lado a lado) =====
 periodo_options = ["Última hora", "Últimas 24h", "Últimos 7 dias", "Últimos 30 dias", "Personalizado"]
-periodo_default = prefs.get("period", "Últimos 7 dias")
+periodo_default = prefs.get("period", "Últimas 24h")
 col1, col2 = sb.columns(2)
 with col1:
     periodo = st.radio("📅 Período", periodo_options,
@@ -296,7 +303,7 @@ with col1:
 
 with col2:
     refresh_options = list(config.REFRESH_INTERVALS.keys())
-    refresh_default = prefs.get("refresh_option", "1 hora")
+    refresh_default = prefs.get("refresh_option", "10 minutos")
     refresh_option = st.radio(
         "⏱ Atualizar",
         options=refresh_options,
@@ -343,8 +350,8 @@ else:
     end = now + pd.Timedelta(minutes=1)
 
 f = df[(df["data"] >= start) & (df["data"] <= end)]
-if cat != "Todas":
-    f = f[f["categoria"] == cat]
+if cat:
+    f = f[f["categoria"].isin(cat)]
 if fontes:
     f = f[f["fonte"].isin(fontes)]
 if sent:
@@ -382,7 +389,7 @@ if portfolio_list:
     portfolio_news = portfolio.get_portfolio_news(f, portfolio_list)
     stats = portfolio.get_portfolio_stats(f, portfolio_list)
 
-    with st.expander("💼 Radar da Carteira", expanded=True):
+    with st.expander("💼 Radar da Carteira", expanded=False):
         most_cited = stats["most_cited"] if stats["most_cited"] else "—"
         kpi_row([
             ("💼 Notícias da Carteira", stats["total_relevant"]),

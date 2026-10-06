@@ -53,10 +53,14 @@ def enrich(df: pd.DataFrame) -> pd.DataFrame:
     return df.drop_duplicates("link").sort_values("data", ascending=False)[COLS].reset_index(drop=True)
 
 
-def fetch_all() -> tuple[pd.DataFrame, list[str]]:
-    """Coleta todos os feeds em paralelo."""
+def fetch_all(categories: tuple[str, ...] = ()) -> tuple[pd.DataFrame, list[str]]:
+    """Coleta em paralelo os feeds das categorias informadas (vazio = todos)."""
+    wanted = set(categories)
+    if "Inteligência Artificial" in wanted:  # itens de IA vêm de feeds de tecnologia
+        wanted.add("Tecnologia")
+    feeds = [f for f in config.FEEDS if not wanted or f.category in wanted]
     with ThreadPoolExecutor(max_workers=8) as ex:
-        results = list(ex.map(_fetch, config.FEEDS))
+        results = list(ex.map(_fetch, feeds))
     rows = [i for items, _ in results for i in items]
     errors = [err for _, err in results if err]
     return enrich(pd.DataFrame(rows)), errors
