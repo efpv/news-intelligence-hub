@@ -103,8 +103,10 @@ def test_category_icons():
 
 
 def test_overview_cards_click_filters_and_restores():
+    import streamlit as st
     from streamlit.testing.v1 import AppTest
 
+    st.cache_data.clear()
     now = pd.Timestamp.now(tz=config.TIMEZONE)
     sample = pd.DataFrame([
         {
@@ -176,6 +178,52 @@ def test_overview_cards_click_filters_and_restores():
         assert any("Notícia de Política" in m for m in md_vals)
         assert any("Notícia de Economia" in m for m in md_vals)
         assert any("Notícia de Tecnologia" in m for m in md_vals)
+
+
+def test_overview_filtering_in_memory_no_refetch():
+    from unittest.mock import MagicMock
+    import streamlit as st
+    from streamlit.testing.v1 import AppTest
+
+    st.cache_data.clear()
+    now = pd.Timestamp.now(tz=config.TIMEZONE)
+    sample = pd.DataFrame([
+        {
+            "titulo": "Notícia de Política", "resumo": "resumo pol", "fonte": "Fonte A",
+            "categoria": "Política", "link": "http://a", "sentimento": "Neutro", "score": 0.0,
+            "tags": ["Governo"], "data": now,
+        },
+        {
+            "titulo": "Notícia de Economia", "resumo": "resumo eco", "fonte": "Fonte B",
+            "categoria": "Economia", "link": "http://b", "sentimento": "Positivo", "score": 0.5,
+            "tags": ["PIB"], "data": now,
+        },
+    ])
+    mock_fetch = MagicMock(return_value=(sample, []))
+    with patch.object(rss_reader, "fetch_all", mock_fetch):
+        at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=60).run()
+        assert not at.exception
+        # Chamado apenas uma vez na inicialização
+        assert mock_fetch.call_count == 1
+        assert "news_data" in at.session_state
+
+        # Alternar filtros pelos cards da Visão Geral deve ser puramente em memória (sem nova busca)
+        at.button(key="kpi_cat_politica").click().run()
+        assert not at.exception
+        assert mock_fetch.call_count == 1
+
+        at.button(key="kpi_cat_economia").click().run()
+        assert not at.exception
+        assert mock_fetch.call_count == 1
+
+        at.button(key="kpi_cat_total").click().run()
+        assert not at.exception
+        assert mock_fetch.call_count == 1
+
+        # Apenas na atualização manual (botão 🔄) uma nova busca deve ocorrer
+        at.button(key="reload_page_btn").click().run()
+        assert not at.exception
+        assert mock_fetch.call_count == 2
 
 
 def test_app_runs_without_exceptions():

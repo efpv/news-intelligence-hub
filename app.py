@@ -10,7 +10,17 @@ import plotly.express as px
 import streamlit as st
 import streamlit.components.v1 as components
 
-from src import analytics, config, export, portfolio, preferences, rss_reader, summarizer, trends, utils
+from src import (
+    analytics,
+    config,
+    export,
+    portfolio,
+    preferences,
+    rss_reader,
+    summarizer,
+    trends,
+    utils,
+)
 
 st.set_page_config(page_title="News Intelligence Hub", page_icon="📡", layout="wide")
 st.markdown(f"<style>{(Path(__file__).parent / 'assets/styles.css').read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
@@ -91,6 +101,7 @@ def check_refresh() -> None:
     if time_elapsed >= st.session_state.refresh_interval - 5:
         st.session_state["_last_refresh_time"] = current_time
         st.cache_data.clear()
+        st.session_state.pop("news_data", None)
         st.rerun()
 
 
@@ -142,9 +153,11 @@ with hcol2:
             reload_clicked = st.button("🔄", key="reload_page_btn")
     if reload_clicked:
         st.cache_data.clear()
+        st.session_state.pop("news_data", None)
+        st.session_state["_last_refresh_time"] = time.time()
         st.rerun()
-slot = st.empty()
-slot.markdown('<div class="skel"></div>' * 3, unsafe_allow_html=True)
+
+
 def _saved_categories() -> list[str]:
     saved = st.session_state.preferences.get("selected_category", [])
     if isinstance(saved, str):  # formato antigo: valor único ("Todas" = sem filtro)
@@ -171,9 +184,18 @@ def _select_overview_category(selected: str | None) -> None:
         preferences.save_preferences(st.session_state.preferences)
 
 
-with st.spinner("Coletando notícias…"):
-    df, errors, fetched_at = load_news()
-slot.empty()
+# Carrega notícias na inicialização e armazena em cache de estado para filtragem em memória
+if "news_data" in st.session_state and st.session_state["news_data"] is not None:
+    df, errors, fetched_at = st.session_state["news_data"]
+else:
+    slot = st.empty()
+    slot.markdown('<div class="skel"></div>' * 3, unsafe_allow_html=True)
+    with st.spinner("Coletando notícias…"):
+        df, errors, fetched_at = load_news()
+        if not df.empty:
+            st.session_state["news_data"] = (df, errors, fetched_at)
+    slot.empty()
+
 check_refresh()
 auto_refresh_checker()
 update_slot.markdown(f'<span class="update-info-line">🕒 Última atualização • <strong>{fetched_at:%d/%m %H:%M}</strong></span>', unsafe_allow_html=True)
@@ -410,23 +432,22 @@ for c in overview_categories:
     icon = config.CATEGORY_ICONS.get(c, "📂")
     overview_cards.append((c, icon, int(cnt.get(c, 0)), c))
 
-with st.expander("📊 Visão Geral", expanded=True):
-    with st.container(key="overview_kpi_row"):
-        cols = st.columns(len(overview_cards))
-        for col, (label, icon, count, cat_name) in zip(cols, overview_cards):
-            with col:
-                slug = "total" if cat_name is None else utils.slugify(cat_name)
-                is_active = (cat_name is None and not active_cats) or (cat_name is not None and cat_name in active_cats)
-                color_tag = "blue" if is_active else "gray"
-                st.button(
-                    f":{color_tag}[{icon} {label}]\n\n**{count}**",
-                    key=f"kpi_cat_{slug}",
-                    type="primary" if is_active else "secondary",
-                    on_click=_select_overview_category,
-                    args=(cat_name,),
-                    width="stretch",
-                    help=f"Filtrar por {label}" if cat_name else "Limpar filtros e exibir todas as notícias",
-                )
+with st.expander("📊 Visão Geral", expanded=True), st.container(key="overview_kpi_row"):
+    cols = st.columns(len(overview_cards))
+    for col, (label, icon, count, cat_name) in zip(cols, overview_cards):
+        with col:
+            slug = "total" if cat_name is None else utils.slugify(cat_name)
+            is_active = (cat_name is None and not active_cats) or (cat_name is not None and cat_name in active_cats)
+            color_tag = "blue" if is_active else "gray"
+            st.button(
+                f":{color_tag}[{icon} {label}]\n\n**{count}**",
+                key=f"kpi_cat_{slug}",
+                type="primary" if is_active else "secondary",
+                on_click=_select_overview_category,
+                args=(cat_name,),
+                width="stretch",
+                help=f"Filtrar por {label}" if cat_name else "Limpar filtros e exibir todas as notícias",
+            )
 
 # ---------- Portfolio KPIs (se carteira configurada) ----------
 if portfolio_list:
