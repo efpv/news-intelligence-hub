@@ -41,6 +41,41 @@ def test_default_preferences():
     assert d["portfolio"]
 
 
+def test_email_as_preference_key(tmp_path):
+    assert preferences.is_valid_email("usuario@exemplo.com")
+    assert not preferences.is_valid_email("invalido")
+    assert not preferences.is_valid_email("")
+
+    # E-mail normalizado gera chave determinística idêntica
+    id1 = preferences._email_to_id("Usuario@Exemplo.COM ")
+    id2 = preferences._email_to_id("usuario@exemplo.com")
+    assert id1 == id2
+
+    # Recuperação isolada por chave de e-mail
+    prefs_a = preferences.get_default_preferences()
+    prefs_a["search_term"] = "Termo Usuario A"
+    prefs_b = preferences.get_default_preferences()
+    prefs_b["search_term"] = "Termo Usuario B"
+
+    with patch.object(preferences, "PREFERENCES_DIR", tmp_path):
+        # Salva para o usuário A
+        file_a = preferences._preferences_file(id1)
+        file_a.parent.mkdir(parents=True, exist_ok=True)
+        import json
+        file_a.write_text(json.dumps(prefs_a), encoding="utf-8")
+
+        # Usuário A recupera com seu e-mail
+        loaded_a = preferences.load_preferences(id1)
+        assert loaded_a["search_term"] == "Termo Usuario A"
+
+        # Outro e-mail não acessa os dados de A
+        id_b = preferences._email_to_id("outro@exemplo.com")
+        loaded_b = preferences.load_preferences(id_b)
+        assert loaded_b["search_term"] != "Termo Usuario A"
+        assert loaded_b["portfolio"] == preferences.get_default_preferences()["portfolio"]
+        assert loaded_b["search_term"] == ""
+
+
 def test_tags_and_sentiment():
     assert "Lula" in tags.extract_tags("Lula anuncia medida")
     assert isinstance(sentiment.score("bom resultado", "pt"), float)
