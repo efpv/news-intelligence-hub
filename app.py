@@ -10,7 +10,7 @@ import plotly.express as px
 import streamlit as st
 import streamlit.components.v1 as components
 
-from src import analytics, config, export, portfolio, preferences, rss_reader, summarizer, trends
+from src import analytics, config, export, portfolio, preferences, rss_reader, summarizer, trends, utils
 
 st.set_page_config(page_title="News Intelligence Hub", page_icon="📡", layout="wide")
 st.markdown(f"<style>{(Path(__file__).parent / 'assets/styles.css').read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
@@ -152,9 +152,27 @@ def _saved_categories() -> list[str]:
     return list(saved)
 
 
+cat_options = config.CATEGORIES + sorted({f.category for f in config.FEEDS} - set(config.CATEGORIES))
+if "cat_filter" not in st.session_state:
+    st.session_state["cat_filter"] = [c for c in _saved_categories() if c in cat_options]
+
+
+def _select_overview_category(selected: str | None) -> None:
+    """Atualiza o estado de filtro por categoria da aplicação."""
+    if selected is None:
+        st.session_state["cat_filter"] = []
+        if "preferences" in st.session_state:
+            st.session_state.preferences["selected_category"] = []
+    else:
+        st.session_state["cat_filter"] = [selected]
+        if "preferences" in st.session_state:
+            st.session_state.preferences["selected_category"] = [selected]
+    if st.session_state.get("_user_id"):
+        preferences.save_preferences(st.session_state.preferences)
+
+
 with st.spinner("Coletando notícias…"):
-    selected_cats = tuple(sorted(st.session_state.get("cat_filter", _saved_categories())))
-    df, errors, fetched_at = load_news(selected_cats)
+    df, errors, fetched_at = load_news()
 slot.empty()
 check_refresh()
 auto_refresh_checker()
@@ -166,6 +184,7 @@ if st.session_state.get("email"):
     lcol1.caption(f"💾 Preferências salvas para **{st.session_state['email']}**")
     if lcol2.button("Sair", key="email_logout_btn", width="content"):
         preferences.logout()
+        st.session_state.pop("cat_filter", None)
         st.rerun()
 else:
     with st.expander("💾 Salvar minhas preferências por e-mail", expanded=False):
@@ -177,6 +196,7 @@ else:
                                         placeholder="voce@exemplo.com", label_visibility="collapsed")
         if ecol2.button("💾 Salvar/Carregar", key="email_login_btn", width="stretch"):
             if preferences.login_with_email(email_input):
+                st.session_state.pop("cat_filter", None)
                 st.toast("✅ Preferências vinculadas ao seu e-mail!", icon="✅")
                 st.rerun()
             else:
@@ -247,6 +267,7 @@ with sb.expander("💼 Minha Carteira", expanded=False):
         user_id = st.session_state.get("_user_id")
         if user_id:
             st.session_state.preferences = preferences.load_preferences(user_id)
+            st.session_state.pop("cat_filter", None)
             st.rerun()
         else:
             st.warning("⚠️ Salve suas preferências com um e-mail (no topo da página) antes de restaurar.")
@@ -278,6 +299,7 @@ with sb.expander("💼 Minha Carteira", expanded=False):
                 merged = portfolio.add_to_portfolio(merged, t)
             st.session_state.preferences["portfolio"] = merged
             st.session_state.preferences.update(imported_filters)
+            st.session_state.pop("cat_filter", None)
             preferences.save_preferences(st.session_state.preferences)
             st.toast(f"✅ {len(imported_tickers)} ativo(s) e filtros importados!", icon="✅")
             st.rerun()
@@ -288,9 +310,7 @@ with sb.expander("💼 Minha Carteira", expanded=False):
 sb.subheader("🔎 Filtros de Notícias")
 sb.caption("Customize como deseja ver as notícias")
 
-cat_options = config.CATEGORIES + sorted({f.category for f in config.FEEDS} - set(config.CATEGORIES))
-cat_default = [c for c in _saved_categories() if c in cat_options]
-cat = sb.multiselect("📂 Categoria", cat_options, default=cat_default, placeholder="Todas", key="cat_filter")
+cat = sb.multiselect("📂 Categoria", cat_options, placeholder="Todas", key="cat_filter")
 
 # ===== CONTROLES DE TEMPO (lado a lado) =====
 periodo_options = ["Última hora", "Últimas 24h", "Últimos 7 dias", "Últimos 30 dias", "Personalizado"]
@@ -349,17 +369,19 @@ else:
     start = now - pd.Timedelta(days={"Última hora": 1 / 24, "Últimas 24h": 1, "Últimos 7 dias": 7, "Últimos 30 dias": 30}[periodo])
     end = now + pd.Timedelta(minutes=1)
 
-f = df[(df["data"] >= start) & (df["data"] <= end)]
+base_f = df[(df["data"] >= start) & (df["data"] <= end)]
+if fontes:
+    base_f = base_f[base_f["fonte"].isin(fontes)]
+if sent:
+    base_f = base_f[base_f["sentimento"].isin(sent)]
+if busca:
+    base_f = base_f[(base_f["titulo"] + " " + base_f["resumo"]).str.contains(busca, case=False, regex=False)]
+if show_portfolio_only and portfolio_list:
+    base_f = portfolio.filter_by_portfolio(base_f, portfolio_list)
+
+f = base_f
 if cat:
     f = f[f["categoria"].isin(cat)]
-if fontes:
-    f = f[f["fonte"].isin(fontes)]
-if sent:
-    f = f[f["sentimento"].isin(sent)]
-if busca:
-    f = f[(f["titulo"] + " " + f["resumo"]).str.contains(busca, case=False, regex=False)]
-if show_portfolio_only and portfolio_list:
-    f = portfolio.filter_by_portfolio(f, portfolio_list)
 
 sb.caption(f"✅ {len(f)} de {len(df)} notícias após filtros")
 
@@ -371,18 +393,40 @@ if st.session_state.refresh_interval is not None:
 else:
     sb.caption(f"🕒 Última coleta: {fetched_at:%d/%m %H:%M} · atualização desativada")
 
-# ---------- KPIs ----------
-cnt = f["categoria"].value_counts()
-with st.expander("📊 Visão Geral", expanded=False):
-    kpi_row([
-        ("📰 Total de Notícias", len(f)),
-        ("🏛 Política", int(cnt.get("Política", 0))),
-        ("📈 Mercado Financeiro", int(cnt.get("Mercado Financeiro", 0))),
-        ("💻 Tecnologia", int(cnt.get("Tecnologia", 0))),
-        ("🤖 Inteligência Artificial", int(cnt.get("Inteligência Artificial", 0))),
-        ("😊 Sentimento Positivo", int((f["sentimento"] == "Positivo").sum())),
-        ("⚠ Notícias Relevantes", int((f["tags"].map(len) >= 2).sum())),
-    ])
+# ---------- KPIs (Visão Geral com filtros clicáveis) ----------
+cnt = base_f["categoria"].value_counts()
+total_news_count = len(base_f)
+active_cats = list(cat) if cat else []
+
+overview_categories = [c for c in config.CATEGORIES if c in cat_options]
+for c in cat_options:
+    if c not in overview_categories and (base_f["categoria"] == c).any():
+        overview_categories.append(c)
+
+overview_cards: list[tuple[str, str, int, str | None]] = [
+    ("Total de Notícias", config.CATEGORY_ICONS.get("Total", "📰"), total_news_count, None)
+]
+for c in overview_categories:
+    icon = config.CATEGORY_ICONS.get(c, "📂")
+    overview_cards.append((c, icon, int(cnt.get(c, 0)), c))
+
+with st.expander("📊 Visão Geral", expanded=True):
+    with st.container(key="overview_kpi_row"):
+        cols = st.columns(len(overview_cards))
+        for col, (label, icon, count, cat_name) in zip(cols, overview_cards):
+            with col:
+                slug = "total" if cat_name is None else utils.slugify(cat_name)
+                is_active = (cat_name is None and not active_cats) or (cat_name is not None and cat_name in active_cats)
+                color_tag = "blue" if is_active else "gray"
+                st.button(
+                    f":{color_tag}[{icon} {label}]\n\n**{count}**",
+                    key=f"kpi_cat_{slug}",
+                    type="primary" if is_active else "secondary",
+                    on_click=_select_overview_category,
+                    args=(cat_name,),
+                    width="stretch",
+                    help=f"Filtrar por {label}" if cat_name else "Limpar filtros e exibir todas as notícias",
+                )
 
 # ---------- Portfolio KPIs (se carteira configurada) ----------
 if portfolio_list:

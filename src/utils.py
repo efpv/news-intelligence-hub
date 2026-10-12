@@ -1,6 +1,7 @@
 """Utilitários: logging e limpeza de texto."""
 import logging
 import re
+import unicodedata
 
 from bs4 import BeautifulSoup
 
@@ -17,3 +18,11 @@ def clean_html(raw: str, limit: int = 400) -> str:
     text = BeautifulSoup(raw or "", "html.parser").get_text(" ")
     text = re.sub(r"\s+", " ", text).strip()
     return text if len(text) <= limit else text[:limit].rsplit(" ", 1)[0] + "…"
+
+
+def slugify(text: str) -> str:
+    """Converte texto para slug ASCII seguro para chaves e identificadores."""
+    nfkd = unicodedata.normalize("NFKD", text)
+    ascii_text = nfkd.encode("ASCII", "ignore").decode("utf-8")
+    return re.sub(r"[^a-zA-Z0-9_]", "_", ascii_text.lower()).strip("_")
+

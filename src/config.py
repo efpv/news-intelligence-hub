@@ -7,8 +7,18 @@ CACHE_TTL = 300  # cache mais curto para permitir atualizações frequentes
 REQUEST_TIMEOUT = 8
 MAX_ITEMS_PER_FEED = 30
 USER_AGENT = "Mozilla/5.0 (NewsIntelligenceHub/1.0)"
-CATEGORIES = ["Política", "Economia", "Mercado Financeiro", "Tecnologia", "Inteligência Artificial"]
+CATEGORIES = ["Política", "Economia", "Mercado Financeiro", "Tecnologia", "Inteligência Artificial", "Internacional"]
 COLORS = {"primary": "#58A6FF", "pos": "#3FB950", "neg": "#F85149", "ai": "#A371F7", "neu": "#D29922"}
+CATEGORY_ICONS = {
+    "Total": "📰",
+    "Política": "🏛",
+    "Economia": "💰",
+    "Mercado Financeiro": "📈",
+    "Tecnologia": "💻",
+    "Inteligência Artificial": "🤖",
+    "Internacional": "🌐",
+    "Desenvolvimento": "👨‍💻",
+}
 
 # Opções de intervalo de atualização automática (em minutos)
 REFRESH_INTERVALS = {
@@ -72,39 +82,39 @@ Feed("Tickers da carteira", "Mercado Financeiro",
 # ==========================================
 # ECONOMIA & MERCADO FINANCEIRO (INTERNACIONAL)
 # ==========================================
-Feed("Bloomberg Markets", "Mercado Financeiro", "https://feeds.bloomberg.com/markets/news.rss", "en"),
-Feed("CNBC Business", "Mercado Financeiro", "https://www.cnbc.com/id/100003114/device/rss/rss.html", "en"),
-Feed("CNBC Finance", "Mercado Financeiro", "https://www.cnbc.com/id/10000664/device/rss/rss.html", "en"),
-Feed("MarketWatch Top Stories", "Mercado Financeiro", "https://feeds.content.dowjones.io/public/rss/mw_topstories", "en"),
-Feed("MarketWatch Real-time", "Mercado Financeiro", "https://feeds.content.dowjones.io/public/rss/mw_realtimeheadlines", "en"),
-Feed("Investing.com Global", "Mercado Financeiro", "https://www.investing.com/rss/news.rss", "en"),
-Feed("Seeking Alpha - Market Pulse", "Mercado Financeiro", "https://seekingalpha.com/market_currents.xml", "en"),
-Feed("Wall Street Journal - Business", "Economia", "https://feeds.content.dowjones.io/public/rss/WSJcomUSBusiness", "en"),
-Feed("Financial Times - Global Economy", "Economia", "https://www.ft.com/global-economy?format=rss", "en"),
-Feed("Financial Times - Markets", "Mercado Financeiro", "https://www.ft.com/markets?format=rss", "en"),
-Feed("The Economist - Finance", "Economia", "https://www.economist.com/finance-and-economics/rss.xml", "en"),
-Feed("Federal Reserve Press Releases", "Economia", "https://www.federalreserve.gov/feeds/press_all.xml", "en"),
-Feed("European Central Bank (ECB)", "Economia", "https://www.ecb.europa.eu/rss/press.html", "en"),
-Feed("CB Insights Research", "Mercado Financeiro", "https://www.cbinsights.com/research/feed/", "en"),
-Feed("Fortune Finance", "Economia", "https://fortune.com/feed/fortune-feeds/?id=3230629", "en"),
-Feed("Google News - Reuters Finance", "Mercado Financeiro",
+Feed("Bloomberg Markets", "Internacional", "https://feeds.bloomberg.com/markets/news.rss", "en"),
+Feed("CNBC Business", "Internacional", "https://www.cnbc.com/id/100003114/device/rss/rss.html", "en"),
+Feed("CNBC Finance", "Internacional", "https://www.cnbc.com/id/10000664/device/rss/rss.html", "en"),
+Feed("MarketWatch Top Stories", "Internacional", "https://feeds.content.dowjones.io/public/rss/mw_topstories", "en"),
+Feed("MarketWatch Real-time", "Internacional", "https://feeds.content.dowjones.io/public/rss/mw_realtimeheadlines", "en"),
+Feed("Investing.com Global", "Internacional", "https://www.investing.com/rss/news.rss", "en"),
+Feed("Seeking Alpha - Market Pulse", "Internacional", "https://seekingalpha.com/market_currents.xml", "en"),
+Feed("Wall Street Journal - Business", "Internacional", "https://feeds.content.dowjones.io/public/rss/WSJcomUSBusiness", "en"),
+Feed("Financial Times - Global Economy", "Internacional", "https://www.ft.com/global-economy?format=rss", "en"),
+Feed("Financial Times - Markets", "Internacional", "https://www.ft.com/markets?format=rss", "en"),
+Feed("The Economist - Finance", "Internacional", "https://www.economist.com/finance-and-economics/rss.xml", "en"),
+Feed("Federal Reserve Press Releases", "Internacional", "https://www.federalreserve.gov/feeds/press_all.xml", "en"),
+Feed("European Central Bank (ECB)", "Internacional", "https://www.ecb.europa.eu/rss/press.html", "en"),
+Feed("CB Insights Research", "Internacional", "https://www.cbinsights.com/research/feed/", "en"),
+Feed("Fortune Finance", "Internacional", "https://fortune.com/feed/fortune-feeds/?id=3230629", "en"),
+Feed("Google News - Reuters Finance", "Internacional",
      "https://news.google.com/rss/search?q=site%3Areuters.com+markets+OR+finance+OR+economy&hl=en-US&gl=US&ceid=US:en", "en"),
-Feed("Google News - Latin America Markets", "Mercado Financeiro",
+Feed("Google News - Latin America Markets", "Internacional",
      "https://news.google.com/rss/search?q=Latin+America+markets+OR+LatAm+economy&hl=en-US&gl=US&ceid=US:en", "en"),
-Feed("Google News - Fed & US Rates", "Economia",
+Feed("Google News - Fed & US Rates", "Internacional",
      "https://news.google.com/rss/search?q=Federal+Reserve+OR+interest+rates+OR+US+inflation&hl=en-US&gl=US&ceid=US:en", "en"),
-Feed("Google News - Commodities Global", "Mercado Financeiro",
+Feed("Google News - Commodities Global", "Internacional",
      "https://news.google.com/rss/search?q=Brent+crude+OR+Gold+price+OR+Iron+ore&hl=en-US&gl=US&ceid=US:en", "en"),
 
 # ==========================================
 # CRIPTOMOEDAS (INTERNACIONAL)
 # ==========================================
-Feed("CoinDesk", "Mercado Financeiro", "https://www.coindesk.com/arc/outboundfeeds/rss/", "en"),
-Feed("Cointelegraph", "Mercado Financeiro", "https://cointelegraph.com/rss", "en"),
-Feed("Decrypt", "Mercado Financeiro", "https://decrypt.co/feed", "en"),
-Feed("The Block", "Mercado Financeiro", "https://www.theblock.co/rss.xml", "en"),
-Feed("Blockworks", "Mercado Financeiro", "https://blockworks.co/feed", "en"),
-Feed("Google News - Cryptocurrency", "Mercado Financeiro",
+Feed("CoinDesk", "Internacional", "https://www.coindesk.com/arc/outboundfeeds/rss/", "en"),
+Feed("Cointelegraph", "Internacional", "https://cointelegraph.com/rss", "en"),
+Feed("Decrypt", "Internacional", "https://decrypt.co/feed", "en"),
+Feed("The Block", "Internacional", "https://www.theblock.co/rss.xml", "en"),
+Feed("Blockworks", "Internacional", "https://blockworks.co/feed", "en"),
+Feed("Google News - Cryptocurrency", "Internacional",
      "https://news.google.com/rss/search?q=cryptocurrency+OR+bitcoin+OR+ethereum&hl=en-US&gl=US&ceid=US:en", "en"),
 
 # ==========================================
@@ -114,13 +124,13 @@ Feed("Canaltech", "Tecnologia", "https://canaltech.com.br/rss/"),
 Feed("Tecnoblog", "Tecnologia", "https://tecnoblog.net/feed/"),
 Feed("Olhar Digital", "Tecnologia", "https://olhardigital.com.br/feed/"),
 Feed("Hardware.com.br", "Tecnologia", "https://www.hardware.com.br/rss/"),
-Feed("TechCrunch", "Tecnologia", "https://techcrunch.com/feed/", "en"),
-Feed("The Verge", "Tecnologia", "https://www.theverge.com/rss/index.xml", "en"),
-Feed("Wired", "Tecnologia", "https://www.wired.com/feed/rss", "en"),
-Feed("Ars Technica", "Tecnologia", "https://feeds.arstechnica.com/arstechnica/index", "en"),
-Feed("Tom's Hardware", "Tecnologia", "https://www.tomshardware.com/feeds/all", "en"),
-Feed("9to5Mac", "Tecnologia", "https://9to5mac.com/feed/", "en"),
-Feed("MIT Technology Review", "Tecnologia", "https://www.technologyreview.com/feed/", "en"),
+Feed("TechCrunch", "Internacional", "https://techcrunch.com/feed/", "en"),
+Feed("The Verge", "Internacional", "https://www.theverge.com/rss/index.xml", "en"),
+Feed("Wired", "Internacional", "https://www.wired.com/feed/rss", "en"),
+Feed("Ars Technica", "Internacional", "https://feeds.arstechnica.com/arstechnica/index", "en"),
+Feed("Tom's Hardware", "Internacional", "https://www.tomshardware.com/feeds/all", "en"),
+Feed("9to5Mac", "Internacional", "https://9to5mac.com/feed/", "en"),
+Feed("MIT Technology Review", "Internacional", "https://www.technologyreview.com/feed/", "en"),
 Feed("Dev.to", "Desenvolvimento", "https://dev.to/feed", "en"),
 
 # ==========================================
