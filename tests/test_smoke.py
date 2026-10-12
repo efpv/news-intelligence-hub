@@ -25,6 +25,14 @@ def test_every_category_has_feeds():
             assert cat in present, f"sem feeds para {cat}"
 
 
+def test_international_feeds_are_grouped_together():
+    feeds = {f.name: f.category for f in config.FEEDS}
+    assert feeds["BBC Brasil"] == "Internacional"
+    assert feeds["Bloomberg Markets"] == "Internacional"
+    assert feeds["TechCrunch"] == "Internacional"
+    assert feeds["Google News - Brazil Politics"] == "Política"
+
+
 def test_default_preferences():
     d = preferences.get_default_preferences()
     assert d["period"] == "Últimas 24h"
@@ -62,9 +70,112 @@ def test_fetch_all_only_requested_categories():
     assert seen and set(seen) == {"Política"}
 
 
+def test_fetch_all_international_category():
+    seen = []
+
+    def fake(feed):
+        seen.append(feed.category)
+        return [], None
+
+    with patch.object(rss_reader, "_fetch", fake):
+        rss_reader.fetch_all(("Internacional",))
+    assert seen and set(seen) == {"Internacional"}
+
+
 def test_portfolio_has_default_tickers():
     for t in preferences.get_default_preferences()["portfolio"]:
         assert t in portfolio.B3_COMPANIES, t
+
+
+def test_slugify():
+    from src.utils import slugify
+
+    assert slugify("Total de Notícias") == "total_de_noticias"
+    assert slugify("Mercado Financeiro") == "mercado_financeiro"
+    assert slugify("Inteligência Artificial") == "inteligencia_artificial"
+    assert slugify("Política") == "politica"
+
+
+def test_category_icons():
+    assert "Total" in config.CATEGORY_ICONS
+    for cat in config.CATEGORIES:
+        assert cat in config.CATEGORY_ICONS
+
+
+def test_overview_cards_click_filters_and_restores():
+    from streamlit.testing.v1 import AppTest
+
+    now = pd.Timestamp.now(tz=config.TIMEZONE)
+    sample = pd.DataFrame([
+        {
+            "titulo": "Notícia de Política", "resumo": "resumo pol", "fonte": "Fonte A",
+            "categoria": "Política", "link": "http://a", "sentimento": "Neutro", "score": 0.0,
+            "tags": ["Governo"], "data": now,
+        },
+        {
+            "titulo": "Notícia de Economia", "resumo": "resumo eco", "fonte": "Fonte B",
+            "categoria": "Economia", "link": "http://b", "sentimento": "Positivo", "score": 0.5,
+            "tags": ["PIB"], "data": now,
+        },
+        {
+            "titulo": "Notícia de Tecnologia", "resumo": "resumo tec", "fonte": "Fonte C",
+            "categoria": "Tecnologia", "link": "http://c", "sentimento": "Positivo", "score": 0.5,
+            "tags": ["Python"], "data": now,
+        },
+    ])
+    with patch.object(rss_reader, "fetch_all", lambda *a, **k: (sample, [])):
+        at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=60).run()
+        assert not at.exception
+
+        # Sem filtro ativo: card "Total" deve ser primário (destaque visual)
+        total_btn = at.button(key="kpi_cat_total")
+        assert total_btn.proto.type == "primary"
+        assert ":blue[" in total_btn.label
+        assert "**3**" in total_btn.label
+        pol_btn = at.button(key="kpi_cat_politica")
+        assert pol_btn.proto.type == "secondary"
+        assert ":gray[" in pol_btn.label
+        assert "**1**" in pol_btn.label
+        assert at.session_state["cat_filter"] == []
+
+        # Listagem inicial deve conter todas as 3 notícias
+        md_vals = [m.value for m in at.markdown]
+        assert any("Notícia de Política" in m for m in md_vals)
+        assert any("Notícia de Economia" in m for m in md_vals)
+        assert any("Notícia de Tecnologia" in m for m in md_vals)
+
+        # Clica no card de Política
+        pol_btn.click().run()
+        assert not at.exception
+        assert at.session_state["cat_filter"] == ["Política"]
+        assert at.button(key="kpi_cat_politica").proto.type == "primary"
+        assert ":blue[" in at.button(key="kpi_cat_politica").label
+        assert at.button(key="kpi_cat_total").proto.type == "secondary"
+        assert ":gray[" in at.button(key="kpi_cat_total").label
+
+        # Contadores nos cards permanecem sincronizados com o total da base
+        assert "**3**" in at.button(key="kpi_cat_total").label
+        assert "**1**" in at.button(key="kpi_cat_politica").label
+
+        # Listagem exibida deve conter apenas a notícia da categoria Política
+        md_vals = [m.value for m in at.markdown]
+        assert any("Notícia de Política" in m for m in md_vals)
+        assert not any("Notícia de Economia" in m for m in md_vals)
+        assert not any("Notícia de Tecnologia" in m for m in md_vals)
+
+        # Clica no card de Total para restaurar todos
+        at.button(key="kpi_cat_total").click().run()
+        assert not at.exception
+        assert at.session_state["cat_filter"] == []
+        assert at.button(key="kpi_cat_total").proto.type == "primary"
+        assert ":blue[" in at.button(key="kpi_cat_total").label
+        assert at.button(key="kpi_cat_politica").proto.type == "secondary"
+
+        # Listagem volta a exibir todas as notícias
+        md_vals = [m.value for m in at.markdown]
+        assert any("Notícia de Política" in m for m in md_vals)
+        assert any("Notícia de Economia" in m for m in md_vals)
+        assert any("Notícia de Tecnologia" in m for m in md_vals)
 
 
 def test_app_runs_without_exceptions():
